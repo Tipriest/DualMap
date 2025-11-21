@@ -33,6 +33,11 @@ cd DualMap
 ```bash
 conda env create -f environment.yml
 conda activate dualmap
+
+
+# for my situation
+conda install openssl=3.0.13  # Ubuntu 22.04 常用版本
+conda install libcurl
 ```
 
 ### 3. Install MobileCLIP

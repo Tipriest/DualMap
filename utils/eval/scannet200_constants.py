@@ -1,4 +1,5 @@
 ### ScanNet Benchmark constants ###
+# ScanNet20 有效类别ID
 VALID_CLASS_IDS_20 = (
     1,
     2,
@@ -22,6 +23,7 @@ VALID_CLASS_IDS_20 = (
     39,
 )
 
+# ScanNet20 类别标签
 CLASS_LABELS_20 = (
     "wall",
     "floor",
@@ -45,6 +47,7 @@ CLASS_LABELS_20 = (
     "otherfurniture",
 )
 
+# ScanNet20 颜色映射
 SCANNET_COLOR_MAP_20 = {
     0: (0.0, 0.0, 0.0),
     1: (174.0, 199.0, 232.0),
@@ -88,6 +91,7 @@ SCANNET_COLOR_MAP_20 = {
 }
 
 ### ScanNet200 Benchmark constants ###
+# ScanNet200 有效类别ID
 VALID_CLASS_IDS_200 = (
     1,
     2,
@@ -291,6 +295,7 @@ VALID_CLASS_IDS_200 = (
     1191,
 )
 
+# ScanNet200 类别标签
 CLASS_LABELS_200 = (
     "wall",
     "chair",
@@ -494,6 +499,7 @@ CLASS_LABELS_200 = (
     "mattress",
 )
 
+# ScanNet200 颜色映射
 SCANNET_COLOR_MAP_200 = {
     0: (0.0, 0.0, 0.0),
     1: (174.0, 199.0, 232.0),
@@ -699,6 +705,8 @@ SCANNET_COLOR_MAP_200 = {
 }
 
 ### For instance segmentation the non-object categories ###
+# 全景分割有效ID
 VALID_PANOPTIC_IDS = (1, 3)
 
+# 全景分割类别标签
 CLASS_LABELS_PANOPTIC = ("wall", "floor")

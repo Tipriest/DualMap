@@ -11,54 +11,59 @@ from utils.eval.scannet200_constants import *
 
 
 def load_replica_ply(ply_path: str, semantic_info_path: str):
+    """加载Replica数据集的PLY文件和语义信息。"""
     print(f"Loading GT from: {ply_path}")
     # Load ply file
     plydata = plyfile.PlyData.read(ply_path)
 
-    # Read semantic info
+    # Read semantic info(读取语义信息)
     with open(semantic_info_path) as f:
         semantic_info = json.load(f)
-    # Extract a mapping from object id to class id
+    # Extract a mapping from object id to class id(提取从对象id到类别id的映射)
     object_class_mapping = {
         obj["id"]: obj["class_id"] for obj in semantic_info["objects"]
     }
     unique_class_ids = np.unique(list(object_class_mapping.values()))
 
-    # Extract vertex data
+    # Extract vertex data(提取顶点数据)
     vertices = np.vstack(
         [plydata["vertex"]["x"], plydata["vertex"]["y"], plydata["vertex"]["z"]]
     ).T
     # Extract vertex index tuple and object id for each face
+    # 提取每个面的顶点索引元组和对象id
     face_vertices = plydata["face"]["vertex_indices"]  # (num_faces, 4)
     object_ids = plydata["face"]["object_id"]  # (num_faces,)
 
     # Store every face related 4 points xyz --> 4 x 3 shape
+    # 存储每个面相关的4个点的xyz坐标 --> 4 x 3 形状
     vertices_per_face = []
     # Store every face related 4 points obj_id --> 4 shape
+    # 存储每个面相关的4个点的obj_id --> 4 形状
     object_ids_per_face = []
 
-    # From face level to vertex level
+    # From face level to vertex level(从面级别到顶点级别)
     for i, face in enumerate(face_vertices):
         vertices_per_face.append(vertices[face])
         object_ids_per_face.append(np.repeat(object_ids[i], len(face)))
     vertices_face = np.vstack(vertices_per_face)  # (num_faces * 4, 3)
     object_ids_face = np.hstack(object_ids_per_face)  # (num_faces * 4,)
 
-    # Lists to store the ordered pcd and class id for objects/points
+    # Lists to store the ordered pcd and class id for objects/
+    # 用于存储对象/点的有序pcd和类别id的列表
     gt_objs = []
     gt_obj_ids = []
     gt_pts = []
     gt_pt_ids = []
 
-    # Traverse through all the object ids
+    # Traverse through all the object ids(遍历所有对象id)
     unique_object_ids = np.unique(object_ids)
 
-    # Object level GT
+    # Object level GT(对象级别的GT)
     for obj_id in unique_object_ids:
         if obj_id in object_class_mapping.keys():
-            # Get points for the current object
+            # Get points for the current object(获取当前对象的点)
             points = vertices_face[object_ids_face == obj_id, :]
-            # Create a point cloud object
+            # Create a point cloud object(创建点云对象)
             pcd = o3d.geometry.PointCloud()
             pcd.points = o3d.utility.Vector3dVector(points)
             gt_objs.append(pcd)
@@ -66,11 +71,11 @@ def load_replica_ply(ply_path: str, semantic_info_path: str):
             gt_obj_ids.append(object_class_mapping[obj_id])
         # else:
         #     gt_obj_ids.append(0)
-    # Set undefined situation as background
+    # Set undefined situation as background(将未定义情况设置为背景)
     # gt_obj_ids = [0 if class_id == -1 else class_id for class_id in gt_obj_ids]
     gt_obj_ids = np.array(gt_obj_ids)
 
-    # Point level GT
+    # Point level GT(点级别的GT)
     for i, obj_id in enumerate(object_ids_face):
         if obj_id in object_class_mapping.keys():
             # if object_class_mapping[obj_id] in ignore:
@@ -79,7 +84,7 @@ def load_replica_ply(ply_path: str, semantic_info_path: str):
             gt_pt_ids.append(object_class_mapping[obj_id])
         # else:
         #     gt_pt_ids.append(0)
-    # Set undefined situation as background
+    # Set undefined situation as background(将未定义情况设置为背景)
     # gt_pt_ids = [0 if class_id == -1 else class_id for class_id in gt_pt_ids]
     gt_pt_ids = np.array(gt_pt_ids)
     gt_pts = np.vstack(gt_pts)
@@ -101,15 +106,16 @@ def load_replica_ply(ply_path: str, semantic_info_path: str):
 
 
 def load_scannet_ply(ply_path: str, use_scannet200: bool = False):
+    """加载ScanNet数据集的PLY文件。"""
     print(f"Loading GT from: {ply_path}")
     # Load ply file
     plydata = plyfile.PlyData.read(ply_path)
-    # Extract vertex xyz
+    # Extract vertex xyz(提取顶点xyz)
     vertices = np.vstack(
         [plydata["vertex"]["x"], plydata["vertex"]["y"], plydata["vertex"]["z"]]
     ).T
     # print(vertices.shape)
-    # Extract vertex colors
+    # Extract vertex colors(提取顶点颜色)
     vertex_colors = np.vstack(
         [
             plydata["vertex"]["red"],
@@ -121,6 +127,7 @@ def load_scannet_ply(ply_path: str, use_scannet200: bool = False):
     instance_ids = plydata["vertex"]["instance_id"]
 
     # Accept part of vertices because only the 20 classes are fully annotated
+    # 只接受部分顶点，因为只有20个类别是完全标注的
     valid_class_ids = list(VALID_CLASS_IDS_20)
     if use_scannet200:
         valid_class_ids = list(VALID_CLASS_IDS_200)
@@ -142,13 +149,16 @@ def load_scannet_ply(ply_path: str, use_scannet200: bool = False):
 
     if use_scannet200:
         # Lists to store the ordered pcd and class id for objects/points
+        # 用于存储对象/点的有序pcd和类别id的列表
         gt_objs = []
         gt_obj_ids = []
 
         # Traverse through all the object ids
+        # 遍历所有对象id
         unique_object_ids = np.unique(valid_instance_ids)
 
         # Object level GT
+        # 对象级别的GT
         for obj_id in unique_object_ids:
             points = valid_vertices[valid_instance_ids == obj_id, :]
             pcd = o3d.geometry.PointCloud()
@@ -172,6 +182,7 @@ def pairwise_iou_calculate(
     bbox1: o3d.geometry.AxisAlignedBoundingBox,
     bbox2: o3d.geometry.AxisAlignedBoundingBox,
 ) -> float:
+    """计算两个轴对齐包围盒的IoU。"""
 
     v1 = bbox1.volume()
     v2 = bbox2.volume()
@@ -190,6 +201,7 @@ def pairwise_iou_calculate(
 
 
 def calculate_avg_prec(iou_matrix: np.array, obj_idx, gt_idx):
+    """计算平均精度。"""
     acc_values = list()
     prec_values = list()
     rec_values = list()
@@ -214,6 +226,7 @@ def calculate_avg_prec(iou_matrix: np.array, obj_idx, gt_idx):
 def compute_auc(
     top_k: list, labels: np.array, sim_mat: np.ndarray, class_ids: np.array
 ):
+    """计算AUC (Area Under Curve)。"""
     success_k = {k: 0 for k in top_k}
     num_gt_classes = sim_mat.shape[1]
 
@@ -236,6 +249,7 @@ def compute_auc(
 
 
 def draw_auc(auc_path, top_k_acc, class_names):
+    """绘制AUC曲线图。"""
     num_gt_classes = len(class_names)
 
     y = np.array(list(top_k_acc.values()))
@@ -263,6 +277,13 @@ def knn_interpolation(cumulated_pc: np.ndarray, full_sized_data: np.ndarray, k):
     :param full_sized_data: full sized point cloud
     :param k: k for k nearest neighbor interpolation
     :return: pointcloud with predicted labels in last column and ground truth labels in last but one column
+    
+    使用k-nn插值为全尺寸点云的点找到标签
+    :param cumulated_pc: 运行网络后累积的点云结果
+    :param full_sized_data: 全尺寸点云
+    :param k: k近邻插值的k值
+    :return: 最后一列为预测标签，倒数第二列为真实标签的点云
+
     """
 
     labeled = cumulated_pc[cumulated_pc[:, -1] != -1]
@@ -293,15 +314,20 @@ def knn_interpolation(cumulated_pc: np.ndarray, full_sized_data: np.ndarray, k):
 def draw_bar_chart(data_dict, save_path):
     """
     Generate and save a bar chart sorted by values in descending order.
+    生成并保存按值降序排序的条形图
 
     Args:
         data_dict: Input dictionary where keys are class names and values are IOU or other metrics.
         save_path: Path to save the bar chart.
+        data_dict: 输入字典, 其中键是类别名称, 值是IOU或其他指标
+        save_path: 保存条形图的路径
     """
     # Sort the dictionary by values in descending order
+    # 按值降序对字典进行排序
     sorted_items = sorted(data_dict.items(), key=lambda item: item[1], reverse=True)
 
     # Unpack keys and values
+    # 解包键和值
     labels, values = zip(*sorted_items)
 
     # Create the bar chart
@@ -314,6 +340,7 @@ def draw_bar_chart(data_dict, save_path):
     plt.ylabel("IOU")
 
     # Add value labels on top of each bar, rounded to two decimal places
+    # 在每个条形图顶部添加值标签，保留两位小数
     for bar, value in zip(bars, values):
         yval = bar.get_height()
         plt.text(
@@ -326,9 +353,11 @@ def draw_bar_chart(data_dict, save_path):
         )
 
     # Rotate x-axis labels to prevent overlap
+    # 旋转x轴标签以防止重叠
     plt.xticks(rotation=45, ha="right")
 
     # Adjust layout to fit labels
+    # 调整布局以适应标签
     plt.tight_layout()
 
     # Save the image
@@ -343,6 +372,7 @@ def draw_detailed_bar_chart(
 ):
     """
     Generate and save a detailed bar chart with color-coded bars based on class membership.
+    根据类别成员资格生成并保存带有颜色编码条的详细条形图
 
     Args:
         data_dict: Input dictionary where keys are class names and values are IOU or other metrics.
@@ -350,6 +380,11 @@ def draw_detailed_bar_chart(
         unique_to_class_gt: List of class IDs unique to ground truth.
         unique_to_class_pred: List of class IDs unique to predictions.
         save_path: Path to save the bar chart.
+        data_dict: 输入字典, 其中键是类别名称, 值是IOU或其他指标。
+        class_id_names: 将类别ID映射到类别名称的字典。
+        unique_to_class_gt: 地面真值中唯一的类别ID列表。
+        unique_to_class_pred: 预测中唯一的类别ID列表。
+        save_path: 保存条形图的路径。
     """
     unique_to_class_gt = [class_id_names[class_id] for class_id in unique_to_class_gt]
     unique_to_class_pred = [
@@ -357,12 +392,14 @@ def draw_detailed_bar_chart(
     ]
 
     # Sort the dictionary by values in descending order
+    # 按值降序对字典进行排序
     sorted_items = sorted(data_dict.items(), key=lambda item: item[1], reverse=True)
 
     # Unpack keys and values
     labels, values = zip(*sorted_items)
 
     # Create a color list based on class membership
+    # 根据类别成员资格创建颜色列表
     colors = []
     for class_id in labels:
         if np.isin(class_id, unique_to_class_gt):
@@ -382,6 +419,7 @@ def draw_detailed_bar_chart(
     plt.ylabel("IOU")
 
     # Add value labels on top of each bar, rounded to two decimal places
+    # 在每个条形图顶部添加值标签，保留两位小数
     for bar, value in zip(bars, values):
         yval = bar.get_height()
         plt.text(
@@ -394,10 +432,12 @@ def draw_detailed_bar_chart(
         )
 
     # Get current x-axis labels
+    # 获取当前x轴标签
     ax = plt.gca()
     xticks = ax.get_xticklabels()
 
     # Set x-axis label colors based on class membership
+    # 根据类别成员资格设置x轴标签颜色
     for xtick, label in zip(xticks, labels):
         if np.isin(label, unique_to_class_gt):
             xtick.set_color("blue")
@@ -407,9 +447,11 @@ def draw_detailed_bar_chart(
             xtick.set_color("black")  # Default color
 
     # Rotate x-axis labels to prevent overlap
+    # 旋转x轴标签以防止重叠
     plt.xticks(rotation=45, ha="right")
 
     # Adjust layout to fit labels
+    # 调整布局以适应标签
     plt.tight_layout()
 
     # Save the image
@@ -422,6 +464,7 @@ def draw_detailed_bar_chart(
 def get_text_features(
     clip_length: int, class_names: list, clip_model, clip_tokenizer, batch_size=64
 ) -> np.ndarray:
+    """获取文本特征。"""
 
     multiple_templates = [
         "{}",
@@ -429,6 +472,7 @@ def get_text_features(
     ]
 
     # Get all the prompted sequences
+    # 获取所有提示序列
     class_name_prompts = [
         x.format(lm) for lm in class_names for x in multiple_templates
     ]
@@ -438,6 +482,7 @@ def get_text_features(
     # Get Output features
     text_feats = np.zeros((len(class_name_prompts), clip_length), dtype=np.float32)
     # Get the text feature batch by batch
+    # 逐批获取文本特征
     text_id = 0
     while text_id < len(class_name_prompts):
         # Get batch size
@@ -455,10 +500,12 @@ def get_text_features(
         text_id += batch_size
 
     # shrink the output text features into classes names size
+    # 将输出文本特征缩减为类别名称大小
     text_feats = text_feats.reshape((-1, len(multiple_templates), text_feats.shape[-1]))
     text_feats = np.mean(text_feats, axis=1)
-
-    # Normalize the text features
+    
+    # 归一化文本特征
+    # 归一化文本特征
     norms = np.linalg.norm(text_feats, axis=1, keepdims=True)
     text_feats /= norms
 

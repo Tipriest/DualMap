@@ -15,12 +15,14 @@ from omegaconf import DictConfig, OmegaConf
 from scipy.spatial.transform import Rotation as R
 
 # Set up the module-level logger
+# 设置模块级日志记录器
 logger = logging.getLogger(__name__)
 
 
 def as_intrinsics_matrix(intrinsics):
     """
     Get matrix representation of intrinsics.
+    获取内参的矩阵表示
 
     """
     K = np.eye(3)
@@ -32,6 +34,8 @@ def as_intrinsics_matrix(intrinsics):
 
 
 class BaseDataset(torch.utils.data.Dataset):
+    """所有数据集的基类。"""
+
     def __init__(
         self,
         config_dict,
@@ -46,9 +50,11 @@ class BaseDataset(torch.utils.data.Dataset):
         device="cuda:0",
         dtype=torch.float,
         relative_pose: bool = True,  # If True, the pose is relative to the first frame
+                                     # 如果为True，位姿是相对于第一帧的
         **kwargs,
     ):
         super().__init__()
+        # 从config_dict加载自身配置
         # Load self config from config_dict
         self.name = config_dict["dataset_name"]
         self.device = device
@@ -85,19 +91,23 @@ class BaseDataset(torch.utils.data.Dataset):
 
         # file paths
         # paths is a list of paths to color and depth images
+        # 文件路径
+        # paths是彩色和深度图像路径的列表
         self.color_paths, self.depth_paths = self.get_filepaths()
 
         self.num_imgs = len(self.color_paths)
 
         # time_stamps is a list of time stamp for each image
         # poses is a list of poses for each image
+        # time_stamps是每张图像的时间戳列表
+        # poses是每张图像的位姿列表
         self.time_stamps = []
         self.poses = self.get_poses()
 
         if self.end == -1:
             self.end = self.num_imgs
 
-        # upsample the paths by the stride
+        # upsample the paths by the stride(按步长上采样路径)
         logger.info(f"[Dataset] Number of images: {self.num_imgs}")
 
         if use_stride:
@@ -106,12 +116,14 @@ class BaseDataset(torch.utils.data.Dataset):
             self.depth_paths = self.depth_paths[self.start : self.end : self.stride]
             self.poses = self.poses[self.start : self.end : self.stride]
 
-        # update number of images
+        # update number of images(更新图像数量)
         self.num_imgs = len(self.color_paths)
         logger.info(f"[Dataset] Number of images: {self.num_imgs}")
 
         # process poses
         # stack poses in a single tensor
+        # 处理位姿
+        # 将位姿堆叠在单个张量中
         self.poses = torch.stack(self.poses)
         if self.relative_pose:
             self.transformed_poses = self._preprocess_poses(self.poses)
@@ -122,21 +134,26 @@ class BaseDataset(torch.utils.data.Dataset):
 
     def get_filepaths(self):
         """Return paths to color images, depth images. Implement in subclass."""
+        """返回彩色图像、深度图像的路径。在子类中实现。"""
         raise NotImplementedError
 
     def get_poses(self):
         """Return poses. Implement in subclass."""
+        """返回位姿。在子类中实现。"""
         raise NotImplementedError
 
     def _preprocess_image(self, image):
         """
         Preprocess the input image according to the dataset configuration.
+        根据数据集配置预处理输入图像
 
         Parameters:
         image (numpy.ndarray): The input image to preprocess.
+        image (numpy.ndarray): 要预处理的输入图像
 
         Returns:
         numpy.ndarray: The preprocessed image.
+        numpy.ndarray: 预处理后的图像
         """
         color = cv2.resize(
             image,
@@ -152,24 +169,34 @@ class BaseDataset(torch.utils.data.Dataset):
     def _preprocess_poses(self, poses: torch.Tensor) -> torch.Tensor:
         """
         Transforms all the poses from camera to world coordinate system to camera to camera0 coordinate system.
+        将所有位姿从相机到世界坐标系转换为相机到camera0坐标系
 
         Parameters:
         poses (torch.Tensor): A tensor of poses in the shape (N, 4, 4), where N is the number of poses.
             The poses are assumed to be in the camera to world coordinate system.
+        参数:
+        poses (torch.Tensor): 形状为 (N, 4, 4) 的位姿张量, 其中N是位姿数量。
+            假设位姿在相机到世界坐标系中。
 
         Returns:
         torch.Tensor: A tensor of transformed poses in the shape (N, 4, 4).
             The poses are in the camera to camera0 coordinate system.
+        返回:
+        torch.Tensor: 形状为 (N, 4, 4) 的变换后位姿张量。
+            位姿在相机到camera0坐标系中。
         """
         # transform all the poses from c2w to c2c0
+        # 将所有位姿从c2w转换为c2c0
         return self.relative_trans(
             # augment the first element as the anchor pose
+            # 将第一个元素增强为锚点位姿
             poses[0].unsqueeze(0).repeat(poses.shape[0], 1, 1),
             poses,
             orthogonal=True,
         )
 
     def _preprocess_depth(self, depth):
+        """预处理深度图。"""
         depth = cv2.resize(
             depth,
             (self.desired_width, self.desired_height),
@@ -183,13 +210,16 @@ class BaseDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         """Return the number of images."""
+        """返回图像数量。"""
         return self.num_imgs
 
     def __getitem__(self, idx):
-        # get color path
+        """获取一个数据样本。"""
+        # 获取彩色路径
         color_path = self.color_paths[idx]
         depth_path = self.depth_paths[idx]
         # load color and depth images
+        # 加载彩色和深度图像
         color = np.asarray(imageio.imread(str(color_path)), dtype=np.float32)
         if ".png" in depth_path:
             depth = np.asarray(imageio.imread(str(depth_path)), dtype=np.int64)
@@ -197,19 +227,25 @@ class BaseDataset(torch.utils.data.Dataset):
             raise ValueError(f"Depth path {depth_path} is not a png file")
 
         # preprocess color and depth images
+        # 预处理彩色和深度图像
         color = self._preprocess_image(color)
         depth = self._preprocess_depth(depth)
 
         # transfer numpy arrays to torch tensors
+        # 将numpy数组转换为torch张量
         color = torch.from_numpy(color).to(self.device)
         depth = torch.from_numpy(depth).to(self.device)
 
         # TODO: intrinsic params is FIXED, no need to load every time
+        # TODO: 内参是固定的，不需要每次都加载
         K = as_intrinsics_matrix([self.fx, self.fy, self.cx, self.cy])
         # K mat from numpy to torch
+        # K矩阵从numpy到torch
         K = torch.from_numpy(K).to(self.device)
 
         # # scale the K with the downsample ratio
+        # # 按下采样比例缩放K
+
         # K[:3, :3] *= self.w_downsample_ratio
         # K[:3, 3] *= self.w_downsample_ratio
         # K[3, :3] *= self.h_downsample_ratio
@@ -219,6 +255,7 @@ class BaseDataset(torch.utils.data.Dataset):
         intrinsics[:3, :3] = K
 
         # Transfrom poses to the relative pose
+        # 将位姿转换为相对位姿
         pose = self.transformed_poses[idx]
 
         return (
@@ -229,14 +266,15 @@ class BaseDataset(torch.utils.data.Dataset):
         )
 
     def get_color(self, idx):
+        """获取彩色图像。"""
 
-        # get color path
+        # 获取彩色路径
         color_path = self.color_paths[idx]
 
-        # load color and depth images
+        # 加载彩色和深度图像
         color = np.asarray(imageio.imread(str(color_path)), dtype=np.uint8)
 
-        # preprocess color and depth images
+        # 预处理彩色和深度图像
         color = self._preprocess_image(color)
 
         color_name = os.path.splitext(os.path.basename(color_path))[0]
@@ -244,26 +282,29 @@ class BaseDataset(torch.utils.data.Dataset):
         return (color, color_name)
 
     def get_depth(self, idx):
+        """获取深度图。"""
 
-        # get depth path
+        # 获取深度路径
         depth_path = self.depth_paths[idx]
 
-        # load color and depth images
+        # 加载彩色和深度图像
         depth = np.asarray(imageio.imread(str(depth_path)), dtype=np.int64)
 
-        # preprocess color and depth images
+        # 预处理彩色和深度图像
         depth = self._preprocess_depth(depth)
 
         return depth
 
     def get_intrinsics(self, idx):
+        """获取内参矩阵。"""
         K = as_intrinsics_matrix([self.fx, self.fy, self.cx, self.cy])
         return K
 
     def relative_trans(
         self, trans_ab: torch.Tensor, trans_cb: torch.Tensor, orthogonal: bool = False
     ) -> torch.Tensor:
-        # judge the input
+        """计算相对变换。"""
+        # 判断输入
         if not torch.is_tensor(trans_ab):
             raise TypeError("trans_ab must be a torch.Tensor")
         if not torch.is_tensor(trans_cb):
@@ -287,6 +328,8 @@ class BaseDataset(torch.utils.data.Dataset):
 
 
 class ReplicaDataset(BaseDataset):
+    """Replica数据集类。"""
+
     def __init__(
         self,
         config_dict,
@@ -317,6 +360,7 @@ class ReplicaDataset(BaseDataset):
         )
 
     def get_filepaths(self):
+        """获取文件路径。"""
         color_paths = natsorted(glob.glob(f"{self.input_path}/results/frame*.jpg"))
         depth_paths = natsorted(glob.glob(f"{self.input_path}/results/depth*.png"))
 
@@ -326,6 +370,7 @@ class ReplicaDataset(BaseDataset):
         return color_paths, depth_paths
 
     def get_poses(self):
+        """获取位姿。"""
         poses = []
 
         lines = []
@@ -349,6 +394,8 @@ class ReplicaDataset(BaseDataset):
 
 
 class ScanNetDataset(BaseDataset):
+    """ScanNet数据集类。"""
+
     def __init__(
         self,
         config_dict,
@@ -386,6 +433,7 @@ class ScanNetDataset(BaseDataset):
         self.cy = intrinsics[1, 2]
 
     def get_filepaths(self):
+        """获取文件路径。"""
         color_paths = natsorted(glob.glob(f"{self.input_path}/color/*.jpg"))
         depth_paths = natsorted(glob.glob(f"{self.input_path}/depth/*.png"))
 
@@ -395,6 +443,7 @@ class ScanNetDataset(BaseDataset):
         return color_paths, depth_paths
 
     def get_poses(self):
+        """获取位姿。"""
         poses = []
         pose_path_list = natsorted(glob.glob(f"{self.pose_dir}/*.txt"))
 
@@ -405,13 +454,15 @@ class ScanNetDataset(BaseDataset):
 
         logger.info(f"[Dataset] Number of pose: {len(poses)}")
 
-        # Set self.time_stamps to zeros
+        # 将self.time_stamps设置为零
         self.time_stamps = [0.0] * self.num_imgs
 
         return poses
 
 
 class SelfCollectedDataset(BaseDataset):
+    """自采集数据集类。"""
+
     def __init__(
         self,
         config_dict,
@@ -449,6 +500,7 @@ class SelfCollectedDataset(BaseDataset):
         )
 
     def get_filepaths(self):
+        """获取文件路径。"""
         color_paths = natsorted(glob.glob(f"{self.input_path}/rgb/*.png"))
         depth_paths = natsorted(glob.glob(f"{self.input_path}/depth/*.png"))
 
@@ -460,6 +512,7 @@ class SelfCollectedDataset(BaseDataset):
         return color_paths, depth_paths
 
     def get_poses(self):
+        """获取位姿。"""
         poses = []
         time_stamps = []
 
@@ -491,6 +544,8 @@ class SelfCollectedDataset(BaseDataset):
 
 
 class TUMRGBDDataset(BaseDataset):
+    """TUM RGB-D数据集类。"""
+
     def __init__(
         self,
         config_dict,
@@ -528,11 +583,13 @@ class TUMRGBDDataset(BaseDataset):
         )
 
     def extract_timestamp(self, path):
+        """从路径中提取时间戳。"""
         basename = os.path.basename(path)
         timestamp_str = os.path.splitext(basename)[0]
         return float(timestamp_str)
 
     def get_filepaths(self):
+        """获取文件路径并根据时间戳对齐。"""
         color_paths = natsorted(glob.glob(f"{self.input_path}/rgb/*.png"))
         depth_paths = natsorted(glob.glob(f"{self.input_path}/depth/*.png"))
 
@@ -603,6 +660,7 @@ class TUMRGBDDataset(BaseDataset):
         return final_color_paths, final_depth_paths
 
     def get_poses(self):
+        """获取位姿并根据时间戳对齐。"""
         poses_all = []
         time_stamps_all = []
 
@@ -698,20 +756,26 @@ def load_dataset_config(path, default_path=None):
     Args:
         path (str): path to config file.
         default_path (str, optional): whether to use default path. Defaults to None.
+        path (str): 配置文件路径。
+        default_path (str, optional): 是否使用默认路径。默认为None。
 
     Returns:
         cfg (dict): config dict.
 
     """
     # load configuration from file itself
+    # 从文件本身加载配置
     with open(path, "r") as f:
         cfg_special = yaml.full_load(f)
 
     # check if we should inherit from a config
+    # 检查是否应从配置继承
     inherit_from = cfg_special.get("inherit_from")
 
     # if yes, load this config first as default
     # if no, use the default_path
+    # 如果是，则首先加载此配置作为默认配置
+    # 如果否，则使用default_path
     if inherit_from is not None:
         cfg = load_dataset_config(inherit_from, default_path)
     elif default_path is not None:
@@ -729,10 +793,13 @@ def load_dataset_config(path, default_path=None):
 def update_recursive(dict1, dict2):
     """
     Update two config dictionaries recursively.
+    递归更新两个配置字典
 
     Args:
         dict1 (dict): first dictionary to be updated.
         dict2 (dict): second dictionary which entries should be used.
+        dict1 (dict): 要更新的第一个字典。
+        dict2 (dict): 应使用的条目的第二个字典。
     """
     for k, v in dict2.items():
         if k not in dict1:
@@ -744,6 +811,7 @@ def update_recursive(dict1, dict2):
 
 
 def get_dataset(dataconfig, basedir, scene_id, **kwargs):
+    """获取数据集实例。"""
     config_dict = load_dataset_config(dataconfig)
     if config_dict["dataset_name"].lower() in ["replica"]:
         return ReplicaDataset(config_dict, basedir, scene_id, **kwargs)
@@ -758,6 +826,7 @@ def get_dataset(dataconfig, basedir, scene_id, **kwargs):
 
 
 def dataset_initialization(cfg: DictConfig) -> torch.utils.data.Dataset:
+    """初始化数据集。"""
 
     cfg.dataset_path = Path(cfg.dataset_path)
     cfg.dataset_conf_path = Path(cfg.dataset_conf_path)

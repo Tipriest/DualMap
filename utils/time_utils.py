@@ -7,31 +7,34 @@ import numpy as np
 from pympler import asizeof
 from tabulate import tabulate
 
-# Set up the module-level logger
+# 设置模块级日志记录器
 logger = logging.getLogger(__name__)
 
 """
-A context manager that measures the time taken for a block of code to execute.
+一个上下文管理器，用于测量代码块的执行时间。
 
-Parameters:
-description (str): A description of the block of code being measured. Default is an empty string.
+参数:
+description (str): 被测量代码块的描述。默认为空字符串。
 
-Yields:
+产生:
 None
 
-Returns:
+返回:
 None
 
-Example:
->>> with measure_time_block("My code block"):
->>>     # Code to be measured
+示例:
+>>> with measure_time_block("我的代码块"):
+>>>     # 需要测量的代码
 >>>     pass
-My code block: 0.01 seconds
+我的代码块: 0.01 秒
 """
 
 
 @contextmanager
 def measure_time_block(description=""):
+    """
+    一个上下文管理器，用于测量代码块的执行时间。
+    """
     start_time = time.time()
     try:
         yield
@@ -49,13 +52,13 @@ def measure_time_block(description=""):
 
 def measure_time(func):
     """
-    A decorator function that measures the execution time of another function.
+    一个装饰器函数，用于测量另一个函数的执行时间。
 
-    Parameters:
-    func (function): The function to be measured.
+    参数:
+    func (function): 需要被测量的函数。
 
-    Returns:
-    function: The decorated function that measures the execution time.
+    返回:
+    function: 测量执行时间的装饰后函数
 
     Example:
     >>> @measure_time
@@ -84,11 +87,12 @@ def measure_time(func):
 def timing_context(name, instance, results_attr_name="timing_results"):
     """
     Context manager for measuring execution time with optional storage.
+    用于测量执行时间并可选存储的上下文管理器
 
     Args:
-        name (str): Name of the block being measured.
-        instance (object): Object to store timing results.
-        results_attr_name (str): Name of the attribute to store timing results on the instance.
+        name (str): 被测量块的名称
+        instance (object): 用于存储计时结果的对象
+        results_attr_name (str): 实例上用于存储计时结果的属性名称
     """
     # initialize the dict
     if not hasattr(instance, results_attr_name):
@@ -97,7 +101,7 @@ def timing_context(name, instance, results_attr_name="timing_results"):
     # get dict
     results_dict = getattr(instance, results_attr_name)
 
-    # initialize the list with the given name
+    # 使用给定名称初始化列表
     if name not in results_dict:
         results_dict[name] = []
 
@@ -111,6 +115,7 @@ def timing_context(name, instance, results_attr_name="timing_results"):
 
 
 def print_timing_results(label, timing_results):
+    # 打印计时结果的表格
     if not timing_results:
         return
     rows = []
@@ -129,6 +134,7 @@ def print_timing_results(label, timing_results):
 
 
 def save_timing_results(timing_results, csv_file):
+    """将计时结果保存到CSV文件。"""
     if not timing_results:
         return
 

@@ -6,6 +6,7 @@ import pandas as pd
 
 
 def calculate_averages_and_save(output_path, scene_ids):
+    """计算平均值并保存结果。"""
     total_miou = 0.0
     total_fmiou = 0.0
     total_macc = 0.0
@@ -65,6 +66,7 @@ def calculate_averages_and_save(output_path, scene_ids):
 
 
 def convert_json_to_excel(json_file_path):
+    """将JSON文件转换为Excel文件。"""
     with open(json_file_path, "r") as f:
         data = json.load(f)
 
