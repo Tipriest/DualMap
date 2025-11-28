@@ -13,6 +13,7 @@ from omegaconf import DictConfig
 from utils.base_map_manager import BaseMapManager
 from utils.navigation_helper import LayoutMap, NavigationGraph
 from utils.object import GlobalObject
+from utils.time_utils import get_timestamped_path
 from utils.types import GoalMode, Observation
 
 # Set up the module-level logger
@@ -151,21 +152,42 @@ class GlobalMapManager(BaseMapManager):
         pass
 
     def save_map(self) -> None:
-        # get the directory
-        save_dir = self.cfg.map_save_path
+        map_save_path = self.cfg.map_save_path
 
-        if os.path.exists(save_dir):
-            shutil.rmtree(save_dir)
-            logger.info(f"[GlobalMap] Cleared the directory: {save_dir}")
-        os.makedirs(save_dir)
+        if os.path.exists(map_save_path):
+            shutil.rmtree(map_save_path)
+            logger.info(f"[GlobalMap] Cleared the directory: {map_save_path}")
+        os.makedirs(map_save_path)
+
         for i, obj in enumerate(self.global_map):
-            if obj.save_path is not None:
-                obj.save_path = obj._initialize_save_path()
-                logger.info(f"[GlobalMap] Saving No.{i} obj: {obj.save_path}")
-                obj.save_to_disk()
-            else:
-                logger.info("[GlobalMap] No save path for local object")
-                continue
+            # Update object save path to use timestamped directory
+            obj.save_path = os.path.join(map_save_path, f"global_obj_{i:04d}.pkl")
+            logger.info(f"[GlobalMap] Saving No.{i} obj: {obj.save_path}")
+            obj.save_to_disk()
+
+        logger.info(f"[GlobalMap] All global objects saved to: {map_save_path}")
+        
+    def save_wall(self, layout_pcd) -> None:
+        map_save_path = self.cfg.map_save_path
+        # Create timestamped directory
+        if os.path.exists(map_save_path):
+            shutil.rmtree(map_save_path)
+            logger.info(f"[GlobalMap] Cleared the directory: {map_save_path}")
+        os.makedirs(map_save_path)
+
+        self.layout_map.set_layout_pcd(layout_pcd)
+        self.layout_map.extract_wall_pcd(num_samples_per_grid=10, z_value=self.cfg.floor_height)
+        # Also save wall.pcd in the same timestamped directory
+        if hasattr(self.layout_map, 'wall_pcd') and self.layout_map.wall_pcd is not None:
+            wall_pcd_path = os.path.join(map_save_path, "wall.pcd")
+            o3d.io.write_point_cloud(wall_pcd_path, self.layout_map.wall_pcd)
+            logger.info(f"[GlobalMap] Saving Wall pcd to: {wall_pcd_path}")
+        elif not hasattr(self.layout_map, 'wall_pcd'):
+            logger.info(f"[GlobalMap] Wall PCD didn't saved to: {map_save_path}")
+            logger.info(f"hasattr(self.layout_map, 'wall_pcd'): {hasattr(self.layout_map, 'wall_pcd')}")
+        elif self.layout_map.wall_pcd is  None:
+            logger.info(f"[GlobalMap] Wall PCD didn't saved to: {map_save_path}")
+            logger.info("self.layout_map.wall_pcd is  None")
 
     def load_map(self) -> None:
         """

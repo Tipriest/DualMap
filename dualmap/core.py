@@ -1,9 +1,10 @@
 import json
 import logging
 import os
+from datetime import datetime
 
 # Optionally import pdb for debugging purposes
-import pdb
+# import pdb
 import queue
 import threading
 import time
@@ -22,7 +23,7 @@ from utils.navigation_helper import (
 )
 from utils.object_detector import Detector
 from utils.time_utils import (
-    get_map_memory_usage,
+    get_timestamped_path,
     print_timing_results,
     save_timing_results,
     timing_context,
@@ -56,6 +57,7 @@ class Dualmap:
         self.visualizer.spawn()
 
         # Keyframe Selection
+        self.curr_frame_id:int = 0
         self.keyframe_counter = 0
         self.last_keyframe_time = None
         self.last_keyframe_pose = None
@@ -132,6 +134,10 @@ class Dualmap:
             )
             self.mapping_thread.start()
 
+        # Store start time for consistent timestamping across all saves
+        self.session_start_time = time.time()
+        self.session_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     def print_cfg(self):
 
         log_file_path = ""
@@ -168,9 +174,11 @@ class Dualmap:
             print(f"{key:<30} : {value}")
         print("=" * line_length)
 
+    # 返回对于dualmap, 这是第几帧关键帧
     def get_keyframe_idx(self):
         return self.keyframe_counter
 
+    # 判别一下这一帧数据是否是关键帧(根据时间间隔，位置差异，角度差异来判断)
     def check_keyframe(self, time_stamp, curr_pose):
         """
         Check if the current frame should be selected as a keyframe based on
@@ -215,7 +223,7 @@ class Dualmap:
         if is_keyframe:
             self.keyframe_counter += 1
             logger.info(
-                f"[Core][CheckKeyframe] Current frame is keyframe: {self.keyframe_counter}"
+                "[Core][CheckKeyframe] Current frame is keyframe: %s",self.keyframe_counter
             )
             return True
         else:
@@ -515,7 +523,8 @@ class Dualmap:
                     timeout=1
                 )  # Timeout exception
                 logger.info(
-                    f"[Core][MappingThread] Received data for frame {curr_frame_id}, Queue size {self.detection_results_queue.qsize()}"
+                    f"[Core][MappingThread] Received data for frame {curr_frame_id},"
+                    " Queue size {self.detection_results_queue.qsize()}"
                 )
 
                 # Set time stamp
@@ -605,13 +614,13 @@ class Dualmap:
 
     def end_process(self):
         """
-        The process of ending the sequnce.
+        The process of ending the sequence with timestamped results.
         """
         end_frame_id = self.curr_frame_id
 
         self.stop_threading()
 
-        # end duration
+        # end duration 10+5+1
         end_range = self.cfg.active_window_size + self.cfg.max_pending_count + 1
 
         for i in range(end_range):
@@ -645,28 +654,44 @@ class Dualmap:
                 self.visualizer.set_time_sequence("frame", end_range + 1)
                 logger.info("[Core][EndProcess] Local Map Merged")
 
-        # save the local mapping results
+        # Create a session-specific timestamped directory for all results
+        base_output_dir = os.path.dirname(self.cfg.map_save_path)
+        session_dir = get_timestamped_path(base_output_dir)
+        
+        # Update save paths to use session directory
         if self.cfg.save_local_map:
+            self.cfg.map_save_path = os.path.join(session_dir, "local_map")
+            self.local_map_manager.cfg.map_save_path = self.cfg.map_save_path
             self.local_map_manager.save_map()
 
-        # save the global mapping results
         if self.cfg.save_global_map:
+            self.cfg.map_save_path = os.path.join(session_dir, "global_map") 
+            self.global_map_manager.cfg.map_save_path = self.cfg.map_save_path
             self.global_map_manager.save_map()
 
         if self.cfg.save_layout:
+            self.cfg.map_save_path = os.path.join(session_dir, "layout")
+            self.detector.cfg.map_save_path = self.cfg.map_save_path
             self.detector.save_layout()
+            
+        if self.cfg.save_wall:
+            self.cfg.map_save_path = os.path.join(session_dir, "wall")
+            self.global_map_manager.cfg.map_save_path = self.cfg.map_save_path
+            layout_pcd = self.detector.get_layout_pointcloud()
+            self.global_map_manager.save_wall(layout_pcd)
 
-        # Dualmap process timing
+        # Save timing results to session directory
         if hasattr(self, "timing_results"):
             print_timing_results("Dualmap", self.timing_results)
-            system_time_path = self.cfg.map_save_path + "/../system_time.csv"
+            system_time_path = os.path.join(session_dir, "system_time.csv")
             save_timing_results(self.timing_results, system_time_path)
 
-        # Detector process timing
         if hasattr(self.detector, "timing_results"):
             print_timing_results("Detector", self.detector.timing_results)
-            detector_time_path = self.cfg.map_save_path + "/../detector_time.csv"
+            detector_time_path = os.path.join(session_dir, "detector_time.csv")
             save_timing_results(self.detector.timing_results, detector_time_path)
+            
+        logger.info(f"[Core] All results saved to session directory: {session_dir}")
 
     def monitor_config_file(self, config_file_path: str):
         """

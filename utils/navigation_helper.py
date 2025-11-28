@@ -1,4 +1,6 @@
 import random
+import os
+import logging
 
 import cv2
 import matplotlib.pyplot as plt
@@ -8,7 +10,8 @@ import open3d as o3d
 from omegaconf import DictConfig
 from scipy.ndimage import binary_erosion
 from scipy.spatial import KDTree, Voronoi
-
+from utils.time_utils import get_timestamped_path
+logger = logging.getLogger(__name__)
 
 class LayoutMap:
     def __init__(self, cfg, resolution=0.1, percentile=90, min_area=5, kernel_size=3):
@@ -200,7 +203,7 @@ class LayoutMap:
 
     def extract_wall_pcd(self, num_samples_per_grid=10, z_value=0.0):
         """
-        Extract wall points and save to self.wall_pcd.
+        Extract wall points.
         """
         binary_map = self.process_binary_map()
         wall_points = self.convert_binary_map_to_3d_points(
@@ -210,11 +213,12 @@ class LayoutMap:
         )
         self.wall_pcd = o3d.geometry.PointCloud()
         self.wall_pcd.points = o3d.utility.Vector3dVector(wall_points)
-        # self.visualize_wall_pcd()
-        save_dir = self.cfg.map_save_path
-        layout_pcd_path = save_dir + "/wall.pcd"
-        self.save_wall_pcd(layout_pcd_path)
-
+        
+        # Create timestamped directory for wall results
+        base_save_dir = os.path.dirname(self.cfg.map_save_path)
+        timestamped_dir = get_timestamped_path(base_save_dir)
+        os.makedirs(timestamped_dir, exist_ok=True)
+        
         print(f"Extracted wall point cloud with {len(self.wall_pcd.points)} points.")
 
     def save_wall_pcd(self, output_path="wall_points.pcd"):

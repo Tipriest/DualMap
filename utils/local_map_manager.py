@@ -13,6 +13,7 @@ from utils.base_map_manager import BaseMapManager
 from utils.navigation_helper import NavigationGraph
 from utils.object import LocalObject, LocalObjStatus
 from utils.types import GlobalObservation, GoalMode, Observation
+from utils.time_utils import get_timestamped_path
 
 # Set up the module-level logger
 logger = logging.getLogger(__name__)
@@ -601,21 +602,24 @@ class LocalMapManager(BaseMapManager):
         self.to_be_eliminated.add(obj.uid)
 
     def save_map(self) -> None:
-        # get the directory
-        save_dir = self.cfg.map_save_path
-
-        if os.path.exists(save_dir):
-            shutil.rmtree(save_dir)
-            logger.info(f"[LocalMap] Cleared the directory: {save_dir}")
-        os.makedirs(save_dir)
+        map_save_path = self.cfg.map_save_path
+        
+        if os.path.exists(map_save_path):
+            shutil.rmtree(map_save_path)
+            logger.info(f"[LocalMap] Cleared the directory: {map_save_path}")
+        os.makedirs(map_save_path)
 
         for i, obj in enumerate(self.local_map):
             if obj.save_path is not None:
+                # Update object save path to use timestamped directory
+                obj.save_path = os.path.join(map_save_path, f"local_obj_{i:04d}.pkl")
                 logger.info(f"[LocalMap] 正在保存第{i}个对象: {obj.save_path}")
                 obj.save_to_disk()
             else:
                 logger.warning("[LocalMap] 局部对象没有保存路径")
                 continue
+                
+        logger.info(f"[LocalMap] All local objects saved to: {map_save_path}")
 
     def merge_local_map(self) -> None:
         """合并局部地图中的对象。"""

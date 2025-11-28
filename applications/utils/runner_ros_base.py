@@ -10,16 +10,18 @@ from scipy.spatial.transform import Rotation as R
 
 from utils.time_utils import timing_context
 from utils.types import DataInput
-
+from dualmap.core import Dualmap
 
 class RunnerROSBase:
     """
     Base class for ROS1 and ROS2 runners.
     Handles shared logic such as intrinsics/extrinsics loading,
     image decompression, pose conversion, and keyframe processing.
+    ROS1 和 ROS2 runner的基类
+    处理一些共同的逻辑内容像是内参和外参加载，图像解压，位置变换，关键帧处理等
     """
 
-    def __init__(self, cfg, dualmap):
+    def __init__(self, cfg, dualmap:Dualmap):
         self.cfg = cfg
         self.dualmap = dualmap
         self.logger = logging.getLogger(__name__)
@@ -27,6 +29,7 @@ class RunnerROSBase:
         self.kf_idx = 0
         self.intrinsics = None
         self.extrinsics = None
+        # synced_data_queue 双端队列，但是长度为1，只保留最新加入的1个数据
         self.synced_data_queue = deque(maxlen=1)
         self.shutdown_requested = False
         self.last_message_time = None
@@ -39,7 +42,7 @@ class RunnerROSBase:
                 intrinsic_cfg["fx"],
                 intrinsic_cfg["fy"],
                 intrinsic_cfg["cx"],
-                intrinsic_cfg["cy"],
+                intrinsic_cfg["cy"], 
             )
             self.logger.warning("[Main] Loaded intrinsics from config.")
             return np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
@@ -131,6 +134,7 @@ class RunnerROSBase:
 
         data_input = self.synced_data_queue[-1]
 
+        # 如果不是进入路径搜索模式, 看一下需不需要关闭程序
         if not self.dualmap.calculate_path:
             current_time = current_time_fn()
             last_time = self.last_message_time
@@ -143,9 +147,11 @@ class RunnerROSBase:
                     self.shutdown_requested = True
                     return
 
+        # 判断一下，如果不是关键帧的话也跳过
         if not self.dualmap.check_keyframe(data_input.time_stamp, data_input.pose):
             return
 
+        # 得到对于dualmap, 这是第几个关键帧
         data_input.idx = self.dualmap.get_keyframe_idx()
 
         self.logger.info(
@@ -158,5 +164,7 @@ class RunnerROSBase:
                 self.dualmap.sequential_process(data_input)
 
         self.logger.info(
-            f"[Main] Processing keyframe {data_input.idx} took {time.time() - data_input.time_stamp:.2f} seconds."
+            "[Main] Processing keyframe %s took %.2f seconds.",
+            data_input.idx,
+            time.time() - data_input.time_stamp,
         )

@@ -22,7 +22,7 @@ yolo:
 
   ## The given classes lists
   ## Indoor Classes List
-  given_classes_path: ./config/class_list/gpt_indoor_general.txt
+  # given_classes_path: ./config/class_list/gpt_indoor_general.txt
   # given_classes_path: ./config/class_list/gpt_indoor_office.txt
   # given_classes_path: ./config/class_list/gpt_indoor_apartment.txt
   # given_classes_path: ./config/class_list/gpt_indoor_classroom.txt
@@ -32,7 +32,7 @@ yolo:
 
   ## Dataset Classes List (_ycb add the classes from YCB)
   # given_classes_path: ./config/class_list/hm3d300_classes.txt
-  # given_classes_path: ./config/class_list/hm3d300_classes_ycb.txt
+  given_classes_path: ./config/class_list/hm3d300_classes_ycb.txt
   # given_classes_path: ./config/class_list/scannet200_classes.txt
 
   # Pre-set for stable filter, do not delete this
@@ -180,40 +180,44 @@ use_parallel: True
 ### GENERAL MAP CONFIG
 # If True, run local mapping only and get local map
 # If False, run both local and global mapping and get global map
-run_local_mapping_only: True
+run_local_mapping_only: False
 # Post 3D-level merging between objects, just like ConceptGraphs and HOV-SG
 # If True, the system will merge the local objects with similarity.
 merge_local_map: False
 merge_sim_threshold: 0.9
 
 # Map objects saving directory, if save map
+# Results will be saved in timestamped subdirectories
 map_save_path: ${output_path}/${dataset_name}_${scene_id}/map
 # Save the generated local map
 save_local_map: True
 # Save the global map (set False if run_local_mapping_only is True)
-save_global_map: False
+save_global_map: True
 
 # DEBUG: save cropped images for every object
 save_cropped: False
 
+# Enable timestamped saving for all map results
+use_timestamped_saving: True
 
 ### LAYOUT CONFIG
 layout_voxel_size: 0.05 
 save_layout: True
+save_wall: True
 
 # ============================================================
 # PRELOADING CONFIG
 # ============================================================
 # Preload an existing global map from disk
-preload_global_map: False
+preload_global_map: True
 
 # Preload an existing layout pcd and wall pcd from disk
 # If preload the layout, the layout pcd thread will be disabled
-preload_layout: False
+preload_layout: True
 
 # Path to preload map data.
 # If empty, the system will use the default preload path
-preload_path: ""
+preload_path: "output/map_results/replica_room_0/map"
 # preload path example:
 # preload_path: "output/map_results/replica_room_0/map"
 
@@ -231,4 +235,3 @@ monitor_interval: 0.1
 
 # Editing wall if the wall generation result is not good
 edit_wall: False
-save_wall: False

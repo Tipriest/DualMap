@@ -5,15 +5,21 @@
 </p>
 
 ## 📚 Table of Contents
-- [ROS1 (Noetic) Guide](#ros1-noetic-guide)
+- [Running with ROS1/ROS2](#running-with-ros1ros2)
+  - [📚 Table of Contents](#-table-of-contents)
+  - [ROS1 (Noetic) Guide](#ros1-noetic-guide)
     - [Environment Setup](#environment-setup)
     - [Download Rosbag Data](#download-rosbag-data)
     - [Run with ROS1](#run-with-ros1)
-- [ROS2 (Humble) Guide](#ros2-humble-guide)
+      - [Configurations](#configurations)
+      - [Start Running](#start-running)
+  - [ROS2 (Humble) Guide](#ros2-humble-guide)
     - [Environment Setup](#environment-setup-1)
     - [Download Rosbag Data](#download-rosbag-data-1)
     - [Run with ROS2](#run-with-ros2)
-- [ROS1 <--> ROS2 Bridge](#ros1----ros2-bridge)
+      - [Configurations](#configurations-1)
+      - [Start Running](#start-running-1)
+  - [ROS1 \<--\> ROS2 Bridge](#ros1----ros2-bridge)
 
 
 ## ROS1 (Noetic) Guide

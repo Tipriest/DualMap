@@ -1,34 +1,56 @@
-# DualMap
-<h3>
-  <a href="https://eku127.github.io/DualMap/">项目主页</a> |
-  <a href="https://arxiv.org/abs/2506.01950">arXiv</a> 
-</h3>
+# README.md
 
-<p align="center">
-  <img src="resources/image/optimized-gif.gif" width="70%">
-</p>
+## 一. 项目作用
+作为`语义地图`/`层次关系图`加载和构建的验证平台
+- 输入
+  - ROS实时数据流
+    - RGB-D消息
+    - 机器人位置Pose
+    - 相机内参
+  - 数据集
+    - 数据集
+- 输出
+  - 地图数据流
+    - 语义地图对象列表
+    - 语义地图层次关系
+- 生成文件
+  - layout点云布局
+  - 
+  - 语义地图对象列表
+  - 所有类别物体的数量(class_num.json)
+- 验证
+  - 生成地图之后使用脚本，判断检测率和位置平均检测偏差，最好能够在一张图上打印出来，或者在多张图上打印出来
+  - 
+  - 生成之后查看生成的树状关系图，最好能够用某种方式展示出来，可以用节点拉伸打开这样子
+  - 生成之后查看
+- 需要负责的任务
+  - YOLO扩展与增训
+  - 检测准确度排查
+  - 分层的层次地图
 
-**DualMap** 是一个在线开放词汇映射系统，使机器人能够使用自然语言理解和导航动态 3D 环境。
 
-该系统支持多种输入源，包括离线数据集（**数据集模式**）、ROS 数据流和 rosbag 文件（**ROS 模式**）以及 iPhone 视频流（**Record3d 模式**）。我们为每种输入类型提供了示例。
 
-## 新闻
+## 构建结果
+#### 1. layout.pcd文件
+![alt text](assets/layout.png)
+#### 2. wall.pcd文件
+![alt text](assets/wall.png)
 
-**[2025.08]** 完整代码发布！🎉 欢迎使用、分享反馈和贡献。
+
 
 ## 安装
 
-> ✅ 已在 **Ubuntu 22.04** + **ROS 2 Humble** + **Python 3.10** 上测试通过
+> 已在 **Ubuntu 22.04** + **ROS 2 Humble** + **Python 3.10** 上测试通过
 
-### 1. 克隆仓库（包含子模块）
+#### 1. 克隆仓库（包含子模块）
 
 ```bash
-git clone --branch main --single-branch --recurse-submodules git@github.com:Eku127/DualMap.git
+git clone --branch main --single-branch --recurse-submodules git@github.com:Tipriest/DualMap.git
 cd DualMap
 ```
-> 请确保使用 `--recurse-submodules` 以获取 `mobileclip` 子模块。
 
-### 2. 创建 Conda 环境
+
+#### 2. 创建 Conda 环境
 ```bash
 conda env create -f environment.yml
 conda activate dualmap
@@ -38,33 +60,23 @@ conda install openssl=3.0.13  # Ubuntu 22.04 常用版本
 conda install libcurl
 ```
 
-### 3. 安装 MobileCLIP
+#### 3. 安装 MobileCLIP(以后可以安装clip v2)
 ```bash
 cd 3rdparty/mobileclip
 pip install -e . --no-deps
 cd ../..
 ```
-> 系统当前默认使用 `MobileCLIP-v1`，所有报告的结果都基于 `v1`。
-> 自 2025 年 8 月起，`MobileCLIP-v2` 已发布，系统也支持 `v2`。您可以按照 [Apple MobileCLIP 仓库](https://github.com/apple/ml-mobileclip) 中的说明设置 `v2` 环境。
-
-
-### 4. （可选）配置 Habitat Data Collector
-
-[Habitat Data Collector](https://github.com/Eku127/habitat-data-collector) 是基于 [Habitat-sim](https://github.com/facebookresearch/habitat-sim) 构建的工具。它支持智能体控制、物体操作、数据集和 ROS2 bag 录制，以及通过外部 ROS2 话题进行导航。DualMap 订阅来自 collector 的实时 ROS2 话题进行实时建图和语言引导查询，并发布导航轨迹供智能体跟随。
-
-> 为了获得最佳的 DualMap 体验（特别是交互式建图和导航），**我们强烈推荐配置 Habitat Data Collector**。查看[该仓库](https://github.com/Eku127/habitat-data-collector)了解安装和使用详情。
 
 ## 应用
 
 以下是每种应用类型的需求快速概览：
 
-| 应用 | Conda 环境 | ROS1 | ROS2 | Habitat Data Collector |
-| :--- | :---: | :---: | :---: | :---: |
-| 数据集 / 查询 / iPhone | ✓ | | | |
-| ROS（离线/在线） | ✓ | ✓ | ✓ | |
-| 在线仿真（建图+导航） | ✓ | | ✓ | ✓ |
-* **ROS**：请根据需要安装 ROS1 或 ROS2。
-* **Habitat Data Collector**：目前仅支持 ROS2。
+| 应用 | Conda 环境  | ROS2 | Habitat Data Collector |
+| :--- | :---: | :---: | :---: |
+| 数据集 / 查询 / iPhone | ✓  | | |
+| ROS（离线/在线） | ✓ | ✓ | |
+| 在线仿真（建图+导航） | ✓ | ✓ | ✓ |
+
 
 ### 💾 使用数据集运行
 

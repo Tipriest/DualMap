@@ -27,12 +27,15 @@ sync_threshold: 0.1
 # ============================================================
 ## Detection Config
 # Enable object detection during mapping
+# 在建图的时候是否启用物体检测
 run_detection: True
 
 # Show detection results on Rerun during runtime
-visualize_detection: False
+# 在运行的时候是否在Rerun上显示检测结果
+visualize_detection: True
 
 # Use FastSAM for Open-Voca supplementation
+# 使用FastSam进行开放词汇的补充检测
 use_fastsam: False
 
 # Detection Refinement
@@ -41,9 +44,9 @@ skip_refinement: false
 
 ## Visualization
 # Enable Rerun visualization
-use_rerun: true
+use_rerun: True
 # Enable Rviz visualization
-use_rviz: false
+use_rviz: False
 
 ## Parallelization
 # Use parallel processing (False = sequential)
@@ -76,9 +79,9 @@ preload_layout: false
 
 # Path to preload map data.
 # If empty, the system will use the default preload path
-preload_path: ""
+# preload_path: ""
 # preload_path: "dataset/HM3D_collect/00829-QaLdnwvtxbs/global_map/hm3d"
-# preload_path: "output/map_results/replica_room_0/map"
+preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/session_hm3d_00829-QaLdnwvtxbs_20251128_161656"
 
 # Preload action paths for visualization
 use_given_path: false

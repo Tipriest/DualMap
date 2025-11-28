@@ -1,10 +1,10 @@
 # runner_ros2.py
 
 import logging
-import time
+# import time
 from concurrent.futures import ThreadPoolExecutor
 
-import cv2
+# import cv2
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
@@ -43,6 +43,7 @@ class RunnerROS2(Node, RunnerROSBase):
         self.extrinsics = self.load_extrinsics(self.dataset_cfg)
 
         # Topic Subscribers
+        # 分别订阅 rgb图像 depth图像 odom消息 但是每一个订阅都没有单独的回调
         if self.cfg.use_compressed_topic:
             self.logger.warning("[Main] Using compressed topics.")
             self.rgb_sub = Subscriber(
@@ -59,6 +60,7 @@ class RunnerROS2(Node, RunnerROSBase):
         self.odom_sub = Subscriber(self, Odometry, self.dataset_cfg.ros_topics.odom)
 
         # Sync messages
+        # 三个消息的同步触发回调，三个消息的容差为0.1s
         self.sync = ApproximateTimeSynchronizer(
             [self.rgb_sub, self.depth_sub, self.odom_sub],
             queue_size=10,
@@ -66,7 +68,7 @@ class RunnerROS2(Node, RunnerROSBase):
         )
         self.sync.registerCallback(self.synced_callback)
 
-        # CameraInfo fallback
+        # CameraInfo callback
         self.create_subscription(
             CameraInfo,
             self.dataset_cfg.ros_topics.camera_info,
@@ -142,7 +144,7 @@ class RunnerROS2(Node, RunnerROSBase):
         super().destroy_node()
 
 
-def run_ros2(cfg):
+def run_ros2(cfg): 
     """Entry point for launching ROS2 runner."""
     rclpy.init()
     runner = RunnerROS2(cfg)

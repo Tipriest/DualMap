@@ -1,11 +1,13 @@
 import gzip
 import logging
 import os
-import pdb
+# import pdb
+import shutil
 import pickle
 import threading
 import time
 from pathlib import Path
+from typing import List
 
 import cv2
 import numpy as np
@@ -25,7 +27,7 @@ from utils.pcd_utils import (
     refine_points_with_clustering,
     safe_create_bbox,
 )
-from utils.time_utils import timing_context
+from utils.time_utils import timing_context, get_timestamped_path
 from utils.types import DataInput, LocalObservation, ObjectClasses
 from utils.visualizer import ReRunVisualizer, visualize_result_rgb
 
@@ -345,14 +347,21 @@ class Detector:
             return self.layout_pointcloud
 
     def save_layout(self):
-        """保存布局点云。"""
+        """保存布局点云到带时间戳的目录。"""
         if self.layout_pointcloud is not None:
             layout_pcd = self.get_layout_pointcloud()
-            save_dir = self.cfg.map_save_path
-            layout_pcd_path = save_dir + "/layout.pcd"
+            
+            # Create timestamped directory
+            map_save_path = self.cfg.map_save_path
+            if os.path.exists(map_save_path):
+                shutil.rmtree(map_save_path)
+                logger.info(f"[Detector] Cleared the directory: {map_save_path}")
+            os.makedirs(map_save_path)
+            
+            layout_pcd_path = os.path.join(map_save_path, "layout.pcd")
             o3d.io.write_point_cloud(layout_pcd_path, layout_pcd)
             logger.info(f"[Detector][Layout] Saving layout to: {layout_pcd_path}")
-
+            
     def load_layout(self):
         """
         加载布局点云 layout.pcd, 优先使用 preload_path,
@@ -390,8 +399,8 @@ class Detector:
     ) -> DataInput:
         """获取当前数据输入。"""
         return self.curr_data
-
-    def get_curr_observations(self) -> None:
+    
+    def get_curr_observations(self):
         """获取当前观测。"""
         return self.curr_observations
 
@@ -482,8 +491,7 @@ class Detector:
                 "[Detector] fastSAM未返回任何掩码, 使用空掩码数组"
             )
             # If no mask is returned, create an empty array.
-            # Assume mask size matches input image's first two dims
-            # 如果没有返回掩码，则创建一个空数组。假设掩码大小与输入图像的前两个维度匹配
+            # 假设掩码大小与输入图像的前两个维度匹配
             masks_np = np.empty((0,) + color.shape[:2], dtype=bool)
 
         # Extract class IDs (default all set to unknown_class_id)
@@ -1468,7 +1476,7 @@ class Detector:
         sim_hm = np.max(
             sim[self.num_examples[0] : (self.num_examples[0] + self.num_examples[1])]
         )
-        sim_lm_des = np.max(sim[(self.num_examples[0] + self.num_examples[1]) :])
+        sim_lm_des = np.max(sim[(self.num_examples[0] + self.num_examples[1]):])
 
         # for debugging only
         # lm_idx = np.argmax(sim[:self.num_examples[0]])
@@ -1884,6 +1892,7 @@ class Filter:
         for i in range(N):
             for j in range(i + 1, N):
                 if overlap[i, j]:
+                   
                     if masks_size[i] > masks_size[j]:
                         self.masks[i] = self.masks[i] & (~self.masks[j])
                         self.xyxy[i] = update_bbox(self.masks[i])

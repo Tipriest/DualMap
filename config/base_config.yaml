@@ -8,11 +8,11 @@
 # dataset_conf_path: config/data_config/dataset/self_collected.yaml
 
 ## Replica Dataset
-dataset_name: replica
-scene_id: room_0
-dataset_path: dataset/Replica
-dataset_conf_path: config/data_config/dataset/replica.yaml
-dataset_gt_path: dataset/Replica-Dataset/Replica_original
+# dataset_name: replica
+# scene_id: room_0
+# dataset_path: dataset/Replica
+# dataset_conf_path: config/data_config/dataset/replica.yaml
+# dataset_gt_path: dataset/Replica-Dataset/Replica_original
 
 ## ScanNet Dataset
 # dataset_name: scannet
@@ -26,6 +26,12 @@ dataset_gt_path: dataset/Replica-Dataset/Replica_original
 # scene_id: rgbd_dataset_freiburg3_walking_static
 # dataset_path: dataset/TUM_RGBD
 # dataset_conf_path: config/data_config/dataset/tum_rgbd.yaml
+
+## HM3D Dataset
+dataset_name: hm3d
+scene_id: 00829-QaLdnwvtxbs
+dataset_path: dataset/hm3d
+dataset_conf_path: config/data_config/dataset/hm3d.yaml
 
 
 # ============================================================

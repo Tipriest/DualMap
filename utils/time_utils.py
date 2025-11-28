@@ -1,33 +1,46 @@
+import os
 import csv
 import logging
 import time
 from contextlib import contextmanager
+from datetime import datetime
 
 import numpy as np
 from pympler import asizeof
 from tabulate import tabulate
 
-# 设置模块级日志记录器
+# Set up the module-level logger
 logger = logging.getLogger(__name__)
 
-"""
-一个上下文管理器，用于测量代码块的执行时间。
+def get_timestamp_string():
+    """Generate a timestamp string for file/directory naming."""
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
 
-参数:
-description (str): 被测量代码块的描述。默认为空字符串。
+def get_timestamped_path(base_path: str, prefix: str = "", suffix: str = "") -> str:
+    """
+    Generate a timestamped path for saving results.
+    
+    Args:
+        base_path: Base directory path
+        prefix: Optional prefix for the timestamp directory
+        suffix: Optional suffix for the timestamp directory
+    
+    Returns:
+        Timestamped path string
+    """
+    timestamp = get_timestamp_string()
+    if prefix and suffix:
+        timestamped_dir = f"{prefix}_{timestamp}_{suffix}"
+    elif prefix:
+        timestamped_dir = f"{prefix}_{timestamp}"
+    elif suffix:
+        timestamped_dir = f"{timestamp}_{suffix}"
+    else:
+        timestamped_dir = timestamp
+    
+    return os.path.join(base_path, timestamped_dir)
 
-产生:
-None
 
-返回:
-None
-
-示例:
->>> with measure_time_block("我的代码块"):
->>>     # 需要测量的代码
->>>     pass
-我的代码块: 0.01 秒
-"""
 
 
 @contextmanager

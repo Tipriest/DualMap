@@ -15,11 +15,29 @@ logger = logging.getLogger(__name__)
 
 
 class ReRunVisualizer:
+    # 这一行就是“类变量”，类似 C++ 的 static 成员
+    # 归属于类，而非对象实例
+    # 用于实现单例模式
     _instance = None
-
+    
+    def __new__(cls, cfg=None):
+        """
+        单例模式，只创建一个实例
+        """
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            # Initialize the instance "once"
+            cls._instance._rerun = None
+            cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self, cfg=None) -> None:
-
-        if not self._initialized:
+        """
+        Args:
+            cfg (_type_): _description_
+        """
+        # 安全地读取对象 self 上名为 "_initialized" 的属性；如果这个属性不存在，就返回默认值 False，而不是抛异常。
+        if not getattr(self, "_initialized", False):
             super().__init__()
             self.cfg = cfg
 
@@ -44,15 +62,8 @@ class ReRunVisualizer:
             self._initialized = True
 
             self.overlapped_image = None
-
-    def __new__(cls, cfg=None):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            # Initialize the instance "once"
-            cls._instance._use_rerun = None
-            cls._instance._rerun = None
-            cls._instance._initialized = False
-        return cls._instance
+            self._use_rerun = False
+            self._rerun = None
 
     def set_use_rerun(self, use_rerun):
         self._use_rerun = use_rerun
@@ -79,20 +90,25 @@ class ReRunVisualizer:
                     return func(*args, **kwargs)
                 else:
                     logger.warning(
-                        f"[Visualizar] '{name}' is not a valid rerun method."
+                        "[Visualizar] '%s' is not a valid rerun method.", name
                     )
             else:
                 if not self._use_rerun:
                     logger.info(
-                        f"[Visualizar] Skipping optional rerun call to '{name}' because rerun usage is disabled."
+                        "[Visualizar] Skipping optional rerun call to '%s'"
+                        "because rerun usage is disabled.", name
                     )
                 elif self._rerun is None:
                     logger.info(
-                        f"[Visualizar] Skipping optional rerun call to '{name}' because rerun is not installed."
+                        "[Visualizar] Skipping optional rerun call to '%s'"
+                        " because rerun is not installed.", name
                     )
 
         return method
 
+    def fordebug(self):
+        self._rerun.set_time_sequence()
+    
     def update_intrinsic(self, intrinsic, force=False):
         if self._intrinsic_initialized and not force:
             return
