@@ -288,7 +288,8 @@ class Detector:
 
     def _process_data_input_thread(self):
         """
-        Logic executed in the background thread(在后台线程中执行的逻辑)
+        每一个关键帧处理会调用该函数进行输入数据处理
+        Logic executed in the background thread
         """
         # Initialize prev_kf_data and layout_pointcloud
         if self.prev_kf_data is None:

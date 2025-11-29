@@ -215,10 +215,6 @@ class LayoutMap:
         self.wall_pcd.points = o3d.utility.Vector3dVector(wall_points)
         
         # Create timestamped directory for wall results
-        base_save_dir = os.path.dirname(self.cfg.map_save_path)
-        timestamped_dir = get_timestamped_path(base_save_dir)
-        os.makedirs(timestamped_dir, exist_ok=True)
-        
         print(f"Extracted wall point cloud with {len(self.wall_pcd.points)} points.")
 
     def save_wall_pcd(self, output_path="wall_points.pcd"):

@@ -1,5 +1,14 @@
+[tool.ruff]
+line-length = 120
+target-version = 'py310'
+select = ["E", "F", "W", "I", "B"]
+ignore = [
+    "E203",  # 与 black 冲突
+    "E501",  # 用黑格式化而不是手动控制换行
+]
+
 [tool.black]
-line-length = 88
+line-length = 120
 target-version = ['py38', 'py39', 'py310', 'py311']
 include = '\.pyi?$'
 extend-exclude = '''
@@ -15,6 +24,12 @@ extend-exclude = '''
   | dist
 )/
 '''
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+disallow_untyped_defs = true
+pretty = true
 
 [tool.isort]
 profile = "black"

@@ -81,7 +81,7 @@ preload_layout: false
 # If empty, the system will use the default preload path
 # preload_path: ""
 # preload_path: "dataset/HM3D_collect/00829-QaLdnwvtxbs/global_map/hm3d"
-preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/session_hm3d_00829-QaLdnwvtxbs_20251128_161656"
+preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20251128_211208"
 
 # Preload action paths for visualization
 use_given_path: false
