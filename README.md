@@ -1,133 +1,129 @@
-# DualMap
-<h3>
-  <a href="https://eku127.github.io/DualMap/">Project Page</a> |
-  <a href="https://arxiv.org/abs/2506.01950">arXiv</a> 
-</h3>
+# README.md
 
-<p align="center">
-  <img src="resources/image/optimized-gif.gif" width="70%">
-</p>
+## 一. 项目作用
+作为`语义地图`/`层次关系图`加载和构建的验证平台
+- 输入
+  - ROS实时数据流
+    - RGB-D消息
+    - 机器人位置Pose
+    - 相机内参
+  - 数据集
+    - 数据集
+- 输出
+  - 地图数据流
+    - 语义地图对象列表
+    - 语义地图层次关系
+- 生成文件
+  - layout点云布局
+  - 
+  - 语义地图对象列表
+  - 所有类别物体的数量(class_num.json)
+- 验证
+  - 生成地图之后使用脚本，判断检测率和位置平均检测偏差，最好能够在一张图上打印出来，或者在多张图上打印出来
+  - 
+  - 生成之后查看生成的树状关系图，最好能够用某种方式展示出来，可以用节点拉伸打开这样子
+  - 生成之后查看
+- 需要负责的任务
+  - YOLO扩展与增训
+  - 检测准确度排查
+  - 分层的层次地图
 
 
-**DualMap** is an online open-vocabulary mapping system that enables robots to understand and navigate dynamic 3D environments using natural language.
 
-The system supports multiple input sources, including offline datasets (**Dataset Mode**), ROS streams & rosbag files (**ROS Mode**), and iPhone video streams (**Record3d Mode**). We provide examples for each input type.
+## 构建结果
+#### 1. layout.pcd文件
+![alt text](assets/layout.png)
+#### 2. wall.pcd文件
+![alt text](assets/wall.png)
 
-## News
 
-**[2025.08]**  Full code released! 🎉 Welcome to use, share feedback, and contribute.
 
-## Installation
+## 安装
 
-> ✅ Tested on **Ubuntu 22.04** with **ROS 2 Humble** and **Python 3.10**
+> 已在 **Ubuntu 22.04** + **ROS 2 Humble** + **Python 3.10** 上测试通过
 
-### 1. Clone the Repository (with submodules)
+#### 1. 克隆仓库（包含子模块）
 
 ```bash
-git clone --branch main --single-branch --recurse-submodules git@github.com:Eku127/DualMap.git
+git clone --branch main --single-branch --recurse-submodules git@github.com:Tipriest/DualMap.git
 cd DualMap
 ```
->  Make sure to use `--recurse-submodules` to get `mobileclip`.
 
-### 2. Create Conda Environment
+
+#### 2. 创建 Conda 环境
 ```bash
 conda env create -f environment.yml
 conda activate dualmap
 
-
-# for my situation
+# 针对特定情况
 conda install openssl=3.0.13  # Ubuntu 22.04 常用版本
 conda install libcurl
 ```
 
-### 3. Install MobileCLIP
+#### 3. 安装 MobileCLIP(以后可以安装clip v2)
 ```bash
 cd 3rdparty/mobileclip
 pip install -e . --no-deps
 cd ../..
 ```
-> The system currently defaults to `MobileCLIP-v1`, and all reported results are based on `v1`.
-> Since August 2025, `MobileCLIP-v2` has been released, and the system also supports `v2`. You can set up the `v2` environment by following the instructions in [Apple’s MobileCLIP repository](https://github.com/apple/ml-mobileclip).
 
-### 4. (Optional) Setup ROS 2 Environment
-Setting up ROS2 environment for ROS support and applications.
-We recommend [ROS 2 Humble](https://docs.ros.org/en/humble/Installation.html).
-Once installed, activate the environment:
+## 应用
 
-```bash
-source /opt/ros/humble/setup.bash
-```
+以下是每种应用类型的需求快速概览：
 
-> DualMap’s navigation functionality and real-world integration are based on ROS 2. **Installation is strongly recommended**.
-
-> **ROS1 noetic** is also supported, you can setup the ROS 1 in Ubuntu 22.04 by follow [this guide](resources/doc/ros_communication.md).
-
-### 5. (Optional) Setup Habitat Data Collector
-
-[Habitat Data Collector](https://github.com/Eku127/habitat-data-collector) is a tool built on top of the [Habitat-sim](https://github.com/facebookresearch/habitat-sim). It supports agent control, object manipulation, dataset and ROS2 bag recording, as well as navigation through external ROS2 topics. DualMap subscribes to live ROS2 topics from the collector for real-time mapping and language-guided querying, and publishes navigation trajectories for the agent to follow.
-
-> For the best DualMap experience (especially interactive mapping and navigation), **we strongly recommend setting up the Habitat Data Collector**. See [the repo](https://github.com/Eku127/habitat-data-collector) for installation and usage details.
+| 应用 | Conda 环境  | ROS2 | Habitat Data Collector |
+| :--- | :---: | :---: | :---: |
+| 数据集 / 查询 / iPhone | ✓  | | |
+| ROS（离线/在线） | ✓ | ✓ | |
+| 在线仿真（建图+导航） | ✓ | ✓ | ✓ |
 
 
-## Applications
+### 💾 使用数据集运行
 
-Here's a quick overview of the requirements for each application type:
+DualMap 支持使用**离线数据集**运行。当前支持的数据集包括：
+1. Replica 数据集  
+2. ScanNet 数据集  
+3. TUM RGB-D 数据集  
+4. 使用 [Habitat Data Collector](https://github.com/Eku127/habitat-data-collector) 自行采集的数据  
 
-| Application | Conda Env | ROS1 | ROS2 | Habitat Data Collector |
-| :--- | :---: | :---: | :---: | :---: |
-| Datasets / Query / iPhone | ✓ | | | |
-| ROS (Offline/Online) | ✓ | ✓ | ✓ | |
-| Online Sim (Mapping+Nav) | ✓ | | ✓ | ✓ |
-* **ROS**: Please install either ROS1 or ROS2 based on your needs.
-* **Habitat Data Collector**: Currently, it only supports ROS2.
+对于从您自己的平台采集的数据，您可以按类似格式组织以运行系统。
 
-### 💾 Run with Datasets
+遵循[数据集运行指南](resources/doc/app_runner_dataset.md)来安排数据集、使用这些数据集运行 DualMap 并复现我们论文**表 II** 中的离线建图结果。
 
-DualMap supports running with **offline datasets**. Currently supported datasets include:
-1. Replica Dataset  
-2. ScanNet Dataset  
-3. TUM RGB-D Dataset  
-4. Self-collected data using [Habitat Data Collector](https://github.com/Eku127/habitat-data-collector)  
+### 🤖 使用 ROS 运行
 
-For data collected from your own platform, you can organize it in a similar format to run the system.  
+DualMap 支持来自 **ROS1** 和 **ROS2** 的输入。您可以使用**离线 rosbags** 或在真实机器人上以**在线模式**运行系统。
 
-Follow the [Dataset Runner Guide](resources/doc/app_runner_dataset.md) to arrange datasets, run DualMap with these datasets and reproduce our offline mapping results in **Table II** in our paper.
+遵循 [ROS 运行指南](resources/doc/app_runner_ros.md)开始使用 ROS1/ROS2 rosbags 或实时 ROS 数据流运行 DualMap。
 
-### 🤖 Run with ROS
+### 🕹️ 仿真中的在线建图与导航
 
-DualMap supports input from both **ROS1** and **ROS2**. You can run the system with **offline rosbags** or in **online mode** with real robots.
+DualMap 通过 [Habitat Data Collector](https://github.com/Eku127/habitat-data-collector) 支持仿真中的**在线**交互式建图和物体导航。
 
-Follow the [ROS Runner Guide](resources/doc/app_runner_ros.md) to get started with running DualMap using ROS1/ROS2 rosbags or live ROS streams.
+遵循[在线建图与导航指南](resources/doc/app_simulation.md)开始在交互式仿真场景中运行 DualMap，并复现我们论文**表 III** 中的导航结果（静态和动态）。
 
-### 🕹️ Online Mapping and Navigation in Simulation
+### 📱 使用 iPhone 运行
 
-DualMap supports **online** interactive mapping and object navigation in simulation via the [Habitat Data Collector](https://github.com/Eku127/habitat-data-collector).
+DualMap 支持从 iPhone 上的 **Record3D** 应用进行**实时数据流传输**。
 
-Follow the [Online Mapping and Navigation Guide](resources/doc/app_simulation.md) to get started with running DualMap in interactive simulation scenes and to reproduce the navigation results (both static and dynamic) in **Table III** in our paper.
+遵循 [iPhone 运行指南](resources/doc/app_runner_record_3d.md)开始设置 Record3D、将数据流传输到 DualMap，并使用您自己的 iPhone 进行建图！
 
-### 📱 Run with iPhone
+### 🔍 离线地图查询
 
-DualMap supports **real-time data streaming** from the **Record3D** app on iPhone.
+我们提供了两个预构建的地图示例用于离线查询：一个来自 iPhone 数据，另一个来自 Replica Room 0。
 
-Follow the [iPhone Runner Guide](resources/doc/app_runner_record_3d.md) to get started with setting up Record3D, streaming data to DualMap, and mapping with your own iPhone!
+遵循[离线查询指南](resources/doc/app_offline_query.md)运行查询应用。
 
-### 🔍 Offline Map Query
-
-We provide two prebuilt map examples for offline querying: one from iPhone data and one from Replica Room 0.
-
-Follow the [Offline Query Guide](resources/doc/app_offline_query.md) to run the query application.
-
-### 🖼️ Visualization
+### 🖼️ 可视化
 <p align="center">
     <img src="resources/image/app_visual.jpg" width="100%">
 </p>
 
-The system supports both [Rerun](https://rerun.io) and [Rviz](http://wiki.ros.org/rviz) visualization. When running with ROS, you can switch the visualizaiton via `use_rerun` and `use_rviz` option in `config/runner_ros.yaml`
+系统同时支持 [Rerun](https://rerun.io) 和 [Rviz](http://wiki.ros.org/rviz) 可视化。使用 ROS 运行时，您可以通过 `config/runner_ros.yaml` 中的 `use_rerun` 和 `use_rviz` 选项切换可视化方式。
 
+## 引用
 
-## Citation
-
-If you find our work helpful, please consider starring this repo 🌟 and cite:
+如果您觉得我们的工作有帮助，请考虑为本仓库点星 🌟 并引用：
 
 ```bibtex
 @article{jiang2025dualmap,
@@ -138,13 +134,13 @@ If you find our work helpful, please consider starring this repo 🌟 and cite:
 }
 ```
 
-## Contact
-For technical questions, please create an issue. For other questions, please contact the first author: jjiang127 [at] connect.hkust-gz.edu.cn
+## 联系方式
+技术问题请创建 issue。其他问题请联系第一作者：jjiang127 [at] connect.hkust-gz.edu.cn
 
-## Acknowledgment
+## 致谢
 
-We are grateful to the authors of [HOVSG](https://github.com/hovsg/HOV-SG) and [ConceptGraphs](https://github.com/concept-graphs/concept-graphs) for their contributions and inspiration.
+我们感谢 [HOVSG](https://github.com/hovsg/HOV-SG) 和 [ConceptGraphs](https://github.com/concept-graphs/concept-graphs) 作者的贡献和启发。
 
-Special thanks to @[TOM-Huang](https://github.com/Tom-Huang) for his valuable advice and support throughout the development of this project.
+特别感谢 @[TOM-Huang](https://github.com/Tom-Huang) 在整个项目开发过程中提供的宝贵建议和支持。
 
-We also thank the developers of [MobileCLIP](https://github.com/apple/ml-mobileclip), [CLIP](https://github.com/openai/CLIP), [Segment Anything (SAM)](https://github.com/facebookresearch/segment-anything), [MobileSAM](https://github.com/ChaoningZhang/MobileSAM), [FastSAM](https://github.com/CASIA-IVA-Lab/FastSAM), and [YOLO-World](https://github.com/AILab-CVC/YOLO-World) for their excellent open-source work, which provided strong technical foundations for this project.
+我们也感谢 [MobileCLIP](https://github.com/apple/ml-mobileclip)、[CLIP](https://github.com/openai/CLIP)、[Segment Anything (SAM)](https://github.com/facebookresearch/segment-anything)、[MobileSAM](https://github.com/ChaoningZhang/MobileSAM)、[FastSAM](https://github.com/CASIA-IVA-Lab/FastSAM) 和 [YOLO-World](https://github.com/AILab-CVC/YOLO-World) 的开发者们提供的优秀开源工作，为本项目提供了强大的技术基础。
