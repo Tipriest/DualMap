@@ -15,13 +15,13 @@ class DataInput:
     数据输入的数据类。
 
     Attributes:
-        idx (int): 帧索引。
-        time_stamp (float): 时间戳。
-        color (np.ndarray): 彩色图像 (H, W, 3), uint8类型。
-        depth (np.ndarray): 深度图像 (H, W), float32类型。
-        color_name (str): 彩色图像的文件名。
-        intrinsics (np.ndarray): 相机内参矩阵 (3x3)。
-        pose (np.ndarray): 相机位姿矩阵 (4x4)，从相机到世界的变换。
+        idx (int): 帧索引
+        time_stamp (float): 时间戳
+        color (np.ndarray): 彩色图像 (H, W, 3), uint8类型
+        depth (np.ndarray): 深度图像 (H, W), float32类型
+        color_name (str): 彩色图像的文件名
+        intrinsics (np.ndarray): 相机内参矩阵 (3x3)
+        pose (np.ndarray): 相机位姿矩阵 (4x4)，从相机到世界的变换
     """
 
     idx: int = 0

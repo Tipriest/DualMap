@@ -35,7 +35,6 @@ from utils.visualizer import ReRunVisualizer, visualize_result_rgb
 # 设置模块级日志记录器
 logger = logging.getLogger(__name__)
 
-
 class PoseLowPassFilter:
     """姿态低通滤波器，用于平滑相机位姿。"""
 
@@ -73,7 +72,6 @@ class PoseLowPassFilter:
         T_smooth[:3, :3] = self.smoothed_rotation.as_matrix()
         T_smooth[:3, 3] = self.smoothed_translation
         return T_smooth
-
 
 class Detector:
     # Given input output detection
@@ -122,7 +120,7 @@ class Detector:
         self.curr_data = DataInput()
         self.prev_data = None
         # KF for layout keyframe(用于布局关键帧的KF)
-        self.prev_kf_data = None
+        self.prev_keyframe_data = None
 
         # masked points and colors(掩码点和颜色)
         self.masked_points = []
@@ -184,7 +182,7 @@ class Detector:
                 logger.info(
                     f"[Detector][Init] Loading YOLO model from\t{cfg.yolo.model_path}"
                 )
-                self.yolo = YOLO(cfg.yolo.model_path)
+                self.yolo:YOLO = YOLO(cfg.yolo.model_path)
                 self.yolo.set_classes(self.obj_classes.get_classes_arr())
             except Exception as e:
                 logger.error(f"[Detector][Init] Error loading YOLO model: {e}")
@@ -257,28 +255,12 @@ class Detector:
 
         logger.info(f"[Detector][Init] Finish Init.")
 
-    def update_state(self) -> None:
-        """更新检测器状态，清空当前结果和观测。"""
-        self.curr_results = {}
-        self.curr_observations = []
-        # self.prev_data = self.curr_data.copy()
-        # self.curr_data.clear()
-
-    def update_data(self) -> None:
-        """更新数据，将当前数据复制到前一数据。"""
-        # self.curr_results = {}
-        # self.curr_observations = []
-        # FIXME: 这里是不是应该用深拷贝啊
-        self.prev_data = self.curr_data.copy()
-
-        # self.curr_data.clear()
-
     def set_data_input(self, curr_data: DataInput) -> None:
         """设置数据输入，并在后台线程中处理它。"""
         self.curr_data = curr_data
 
         if not self.cfg.preload_layout:
-            # If a thread is already running, wait for it to finish(如果已有线程在运行，等待它完成)
+            # If a thread is already running, wait for it to finish(如果已有线程在运行，阻塞并等待它完成)
             if self.data_thread and self.data_thread.is_alive():
                 self.data_thread.join()
 
@@ -287,13 +269,12 @@ class Detector:
             self.data_thread.start()
 
     def _process_data_input_thread(self):
-        """
-        每一个关键帧处理会调用该函数进行输入数据处理
-        Logic executed in the background thread
+        """_summary_
+
         """
         # Initialize prev_kf_data and layout_pointcloud
-        if self.prev_kf_data is None:
-            self.prev_kf_data = self.curr_data.copy()
+        if self.prev_keyframe_data is None:
+            self.prev_keyframe_data = self.curr_data.copy()
             layout_pcd = self.depth_to_point_cloud(sample_rate=16)
             with self.layout_lock:  # Ensure thread safety for layout_pointcloud(确保 layout_pointcloud 的线程安全)
                 self.layout_pointcloud += layout_pcd.voxel_down_sample(
@@ -328,7 +309,7 @@ class Detector:
                 )
 
             # Update prev_kf_data
-            self.prev_kf_data = self.curr_data.copy()
+            self.prev_keyframe_data = self.curr_data.copy()
             logger.info("[Detector][Layout] Updated layout pointcloud.(已更新布局点云)")
 
             # Update time and count(更新时间和计数)
@@ -339,6 +320,22 @@ class Detector:
             logger.info(
                 f"[Detector][Layout] Layout update took {layout_time:.4f} seconds."
             )
+
+    def update_state(self) -> None:
+        """更新检测器状态，清空当前结果和观测。"""
+        self.curr_results = {}
+        self.curr_observations = []
+        # self.prev_data = self.curr_data.copy()
+        # self.curr_data.clear()
+
+    def update_data(self) -> None:
+        """更新数据，将当前数据复制到前一数据。"""
+        # self.curr_results = {}
+        # self.curr_observations = []
+        # FIXME: 这里是不是应该用深拷贝啊
+        self.prev_data = self.curr_data.copy()
+
+        # self.curr_data.clear()
 
     def get_layout_pointcloud(self):
         """
@@ -351,18 +348,18 @@ class Detector:
         """保存布局点云到带时间戳的目录。"""
         if self.layout_pointcloud is not None:
             layout_pcd = self.get_layout_pointcloud()
-            
+
             # Create timestamped directory
             map_save_path = self.cfg.map_save_path
             if os.path.exists(map_save_path):
                 shutil.rmtree(map_save_path)
                 logger.info(f"[Detector] Cleared the directory: {map_save_path}")
             os.makedirs(map_save_path)
-            
+
             layout_pcd_path = os.path.join(map_save_path, "layout.pcd")
             o3d.io.write_point_cloud(layout_pcd_path, layout_pcd)
             logger.info(f"[Detector][Layout] Saving layout to: {layout_pcd_path}")
-            
+
     def load_layout(self):
         """
         加载布局点云 layout.pcd, 优先使用 preload_path,
@@ -400,7 +397,7 @@ class Detector:
     ) -> DataInput:
         """获取当前数据输入。"""
         return self.curr_data
-    
+
     def get_curr_observations(self):
         """获取当前观测。"""
         return self.curr_observations
@@ -412,7 +409,7 @@ class Detector:
         (根据时间间隔、位姿差异（平移）和旋转差异，检查当前帧是否应被选为关键帧。)
         """
         curr_pose = self.curr_data.pose
-        prev_kf_pose = self.prev_kf_data.pose
+        prev_kf_pose = self.prev_keyframe_data.pose
 
         # Translation check(平移检查)
         translation_diff = np.linalg.norm(
@@ -880,7 +877,7 @@ class Detector:
     def compute_max_cos_sim(self, image_feats, class_feats):
         """
         Compute the cosine similarity between image_feats and class_feats, and return the class index with the maximum similarity for each image_feat.
-        
+
 
         Args:
             image_feats (np.ndarray): 所有当前图像的CLIP特征, 形状为 (N, 512)
@@ -893,12 +890,12 @@ class Detector:
         # 归一化特征以计算余弦相似度
         image_feats_norm = image_feats / np.linalg.norm(
             image_feats, axis=1, keepdims=True
-        )  
+        )
         # Normalize image_feats
         # 归一化image_feats
         class_feats_norm = class_feats / np.linalg.norm(
             class_feats, axis=1, keepdims=True
-        )  
+        )
         # Normalize class_feats
         # 归一化class_feats
         # 计算余弦相似度: (N, 512) @ (512, C) -> (N, C)
@@ -915,7 +912,7 @@ class Detector:
         将深度图像转换为点云并将其转换到世界坐标系。
 
         Parameters:
-        - sample_rate: The downsampling rate for pixel selection. 
+        - sample_rate: The downsampling rate for pixel selection.
         (1 means all pixels, 2 means every other pixel)
         参数:
         - sample_rate: 像素选择的下采样率。(1表示所有像素, 2表示每隔一个像素)
@@ -928,7 +925,7 @@ class Detector:
         # Extract necessary data from curr_data(从curr_data中提取必要数据)
         depth = self.curr_data.depth.squeeze(
             -1
-        )  
+        )
         # Remove the last dimension if depth is (H, W, 1)
         # 如果深度是(H, W, 1)，则移除最后一个维度
         intrinsics = self.curr_data.intrinsics
@@ -938,7 +935,7 @@ class Detector:
         # 屏蔽无效深度值（例如，深度=0或NaN）
         valid_mask = (depth > 0) & (
             depth != np.inf
-        )  
+        )
         # Create a mask for valid depth values
         # 创建有效深度值的掩码
         depth = depth[valid_mask]  # Only keep valid depth values
@@ -1079,7 +1076,7 @@ class Detector:
     ) -> None:
         """根据当前检测结果计算观测。"""
         # 如果没有检测结果，直接返回
-        if self.curr_results == {}:
+        if not self.curr_results:
             logger.warning("[Detector] 没有检测结果，无法计算观测")
             self.curr_observations = []
             return
@@ -1111,7 +1108,7 @@ class Detector:
                 if abs(z - self.cfg.ceiling_height) < self.cfg.ceiling_threshold:  # 0.1
                     # If z close ceiling_height， skip this observation
                     # 如果z接近天花板高度，跳过此观测
-                    continue  
+                    continue
 
             # Get Mobility(获取移动性)
             # class_name = self.obj_classes.get_classes_arr()[self.curr_results['class_id'][i]]
@@ -1618,7 +1615,7 @@ class Detector:
                     # 修改未知类别的文本特征
                     text_feats[idx] = (
                         self.class_feats_mean
-                    )  
+                    )
                     # You can modify how you update the text_feats here
                     # 你可以在这里修改如何更新文本特征
                     # random_feats = np.random.rand(*self.class_feats_mean.shape)
@@ -1641,11 +1638,10 @@ class Detector:
                     random_feats /= np.linalg.norm(random_feats)
 
                     text_feats[idx] = random_feats
-        
+
         # 返回裁剪的图像、图像特征和文本特征
         # Return the cropped images, image features, and text features
         return image_crops, image_feats, text_feats
-
 
 class Filter:
     """用于过滤检测结果的类。"""
@@ -1893,7 +1889,7 @@ class Filter:
         for i in range(N):
             for j in range(i + 1, N):
                 if overlap[i, j]:
-                   
+
                     if masks_size[i] > masks_size[j]:
                         self.masks[i] = self.masks[i] & (~self.masks[j])
                         self.xyxy[i] = update_bbox(self.masks[i])
@@ -1937,12 +1933,10 @@ class Filter:
         x2 = max(x_i2, x_j2)
         self.xyxy[target, :] = x1, y1, x2, y2
 
-
 def update_bbox(mask):
     """根据掩码更新边界框。"""
     y, x = np.nonzero(mask)
     return np.min(x), np.min(y), np.max(x), np.max(y)
-
 
 def if_same_distribution(img1, img2, mask1, mask2, sim_threshold):
     """检查两个掩码区域的颜色分布是否相似。"""
@@ -1978,7 +1972,6 @@ def if_same_distribution(img1, img2, mask1, mask2, sim_threshold):
     cos_sim = cosine_similarity([hist1], [hist2])[0][0]
 
     return cos_sim > sim_threshold
-
 
 def get_text_features(
     class_names: list, clip_model, clip_tokenizer, device, clip_length, batch_size=64
@@ -2024,7 +2017,6 @@ def get_text_features(
     text_feats /= norms
 
     return text_feats
-
 
 def save_hilow_debug(bbox_hl_mapping, output_image, frame_idx):
     for item in bbox_hl_mapping:

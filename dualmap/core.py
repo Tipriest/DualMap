@@ -78,10 +78,10 @@ class Dualmap:
         if self.cfg.preload_layout:
             logger.warning("[Core][Init] Preloading layout...")
             self.detector.load_layout()
-            
+
             # load wall.pcd directly from disk
             self.global_map_manager.load_wall()
-            
+
             # only generate wall.pcd if it doesn't exist
             if self.global_map_manager.layout_map.wall_pcd is None:
                 logger.warning("[Core][Init] wall.pcd not found, generating from layout.pcd...")
@@ -90,10 +90,10 @@ class Dualmap:
 
         # Start the file monitoring thread
         self.stop_thread = False  # Signal to stop the thread
-        self.monitor_thread = threading.Thread(
-            target=self.monitor_config_file, args=(cfg.config_file_path,)
-        )
-        self.monitor_thread.start()
+        # self.monitor_thread = threading.Thread(
+        #     target=self.monitor_config_file, args=(cfg.config_file_path,)
+        # )
+        # self.monitor_thread.start()
 
         # flags for monitoring
         self.calculate_path = False  # Flag for calculating global path
@@ -223,7 +223,7 @@ class Dualmap:
         if is_keyframe:
             self.keyframe_counter += 1
             logger.info(
-                "[Core][CheckKeyframe] Current frame is keyframe: %s",self.keyframe_counter
+                "[Core][CheckKeyframe] Current frame is keyframe: %s", self.keyframe_counter
             )
             return True
         else:
@@ -657,7 +657,7 @@ class Dualmap:
         # Create a session-specific timestamped directory for all results
         base_output_dir = os.path.dirname(self.cfg.map_save_path)
         session_dir = get_timestamped_path(base_output_dir)
-        
+
         # Update save paths to use session directory
         if self.cfg.save_local_map:
             self.cfg.map_save_path = os.path.join(session_dir, "local_map")
@@ -665,7 +665,7 @@ class Dualmap:
             self.local_map_manager.save_map()
 
         if self.cfg.save_global_map:
-            self.cfg.map_save_path = os.path.join(session_dir, "global_map") 
+            self.cfg.map_save_path = os.path.join(session_dir, "global_map")
             self.global_map_manager.cfg.map_save_path = self.cfg.map_save_path
             self.global_map_manager.save_map()
 
@@ -673,7 +673,7 @@ class Dualmap:
             self.cfg.map_save_path = os.path.join(session_dir, "layout")
             self.detector.cfg.map_save_path = self.cfg.map_save_path
             self.detector.save_layout()
-            
+
         if self.cfg.save_wall:
             self.cfg.map_save_path = os.path.join(session_dir, "wall")
             self.global_map_manager.cfg.map_save_path = self.cfg.map_save_path
@@ -690,7 +690,7 @@ class Dualmap:
             print_timing_results("Detector", self.detector.timing_results)
             detector_time_path = os.path.join(session_dir, "detector_time.csv")
             save_timing_results(self.detector.timing_results, detector_time_path)
-            
+
         logger.info(f"[Core] All results saved to session directory: {session_dir}")
 
     def monitor_config_file(self, config_file_path: str):
