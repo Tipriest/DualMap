@@ -12,44 +12,102 @@ def mask_depth_to_points(
     masks: torch.Tensor,
     device: str = "cuda",
 ):
+    """
+    根据深度图、相机内参和实例 mask, 将像素坐标转换为 3D 点云, 并为每个点附上颜色
+
+    参数说明:
+        depth: (H, W)              单通道深度图, 单位通常为米, 0 或负值表示无效深度
+        image: (H, W, 3) 或 None   RGB 图像, 像素值范围通常为 [0, 1] 或 [0, 255]
+        cam_K: (3, 3)              相机内参矩阵
+                                   [ [fx,  0, cx],
+                                     [ 0, fy, cy],
+                                     [ 0,  0,  1] ]
+        masks: (N, H, W)           N 个二值/概率 mask, 每个 mask 对应一个前景对象或区域
+                                   - 若为二值: 1 表示属于该对象, 0 表示不属于
+                                   - 若为浮点概率：值越大表示该像素越属于该对象
+        device: str                计算设备, 如 "cuda" 或 "cpu"
+
+    返回:
+        points: (N, H, W, 3)       每个 mask 下的 3D 点坐标 (X, Y, Z),
+                                   无效点为 0 (通过 valid 掩掉)
+        colors: (N, H, W, 3)       每个点的 RGB 颜色, 与 points 对应,
+                                   无效点颜色为 0; 若无 image, 则为为每个 mask 随机分配的颜色
+    """
     N, H, W = masks.shape
 
     fx, fy, cx, cy = cam_K[0, 0], cam_K[1, 1], cam_K[0, 2], cam_K[1, 2]
 
-    # x, y = (H, W)
+    # 构建像素网格坐标 (x, y)，维度为 (H, W)
+    # y: 行索引 [0, 1, ..., H-1]
+    # x: 列索引 [0, 1, ..., W-1]
+    # indexing="ij" 表示第一维对应 y(行)，第二维对应 x(列)
     y, x = torch.meshgrid(
         torch.arange(0, H, device=device),
         torch.arange(0, W, device=device),
         indexing="ij",
     )
 
-    # z = (N, H, W)
+    # 将单通道深度图扩展到 N 个通道，对应 N 个 mask：
+    # depth:    (H, W)
+    # depth.repeat(N, 1, 1): (N, H, W)，为每个 mask 复制一份深度图
+    # z: (N, H, W)，mask 后的深度，只保留属于该 mask 的区域
+    #   - 若 masks 是 {0,1}，则 z 在非 mask 区域为 0
+    #   - 若 masks 是权重/概率，则 z 相当于被加权
     z = depth.repeat(N, 1, 1) * masks
 
-    # (N, H, W)
+    # 生成有效深度的掩码：
+    # valid: (N, H, W)，z > 0 的位置为 1，其余为 0
+    # 用 float 是为了后续可以直接做逐元素乘法作为 mask
     valid = (z > 0).float()
 
-    # (N, H, W)
+    # 根据针孔相机模型，从像素坐标和深度恢复相机坐标系下的 3D 点:
+    # 像素坐标 (u, v) ≈ (x, y)，深度为 z 时，
+    # X = (u - cx) * z / fx
+    # Y = (v - cy) * z / fy
+    #
+    # 这里 x, y 原本是 (H, W)，通过广播与 z (N, H, W) 运算后，
+    # 会自动扩展成 (N, H, W)，即为每个 mask 都计算一份 3D 坐标
     x = (x - cx) * z / fx
     y = (y - cy) * z / fy
 
-    # (N, H, W, 3)
+    # 将 (X, Y, Z) 堆叠到最后一个维度，得到点云：
+    # x, y, z:      (N, H, W)
+    # stack 后为：  (N, H, W, 3)
     points = torch.stack((x, y, z), dim=-1) * valid.unsqueeze(-1)
+    # valid.unsqueeze(-1): (N, H, W, 1)
+    # 与 points 相乘后，将无效点（z <= 0 处）统一置为 0
 
     if image is not None:
+        # 若提供了原始 RGB 图像，则使用对应像素的颜色
+
+        # 将 image 扩展到 N 个对象:
+        # image: (H, W, 3)
+        # image.repeat(N, 1, 1, 1): (N, H, W, 3)
+        # 再与 masks (N, H, W) 相乘，仅保留当前对象的区域颜色
+
         rgb = image.repeat(N, 1, 1, 1) * masks.unsqueeze(-1)
+        # 再次乘以 valid，将深度无效处（z <= 0）也置零
         colors = rgb * valid.unsqueeze(-1)
     else:
+        # 若没有提供 RGB 图像，则为每个对象随机分配一个颜色
         print("No RGB image provided, assigning random colors to objects")
         # Generate a random color for each mask
+        # 为每个 mask 生成一个随机 RGB 颜色，范围 [0,1]
+        # random_colors: (N, 3)，每一行是一个对象的 RGB 颜色
         random_colors = (
             torch.randint(0, 256, (N, 3), device=device, dtype=torch.float32) / 255.0
         )  # RGB colors in [0, 1]
         # Expand dims to match (N, H, W, 3) and apply to valid points
+
+        # 将 (N, 3) 扩展为 (N, H, W, 3)，使每个对象在其 mask 区域内是同一种颜色
+        # unsqueeze(1).unsqueeze(1): (N, 1, 1, 3)
+        # expand(-1, H, W, -1):      (N, H, W, 3)
         colors = random_colors.unsqueeze(1).unsqueeze(1).expand(
             -1, H, W, -1
         ) * valid.unsqueeze(-1)
-
+        # 再乘以 valid，将无效点的颜色置为 0
+        
+    # 返回每个 mask 对应的点云和颜色
     return points, colors
 
 

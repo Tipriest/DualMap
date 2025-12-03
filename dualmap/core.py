@@ -264,7 +264,7 @@ class Dualmap:
 
         # Detection process with timing
         with timing_context("Detection Process", self):
-            self.detector.set_data_input(data_input)
+            self.detector.set_data_input_thread(data_input)
 
             if self.cfg.run_detection:
                 self.detector.process_detections()
@@ -307,7 +307,7 @@ class Dualmap:
         # Detection process
         start_time = time.time()
         with timing_context("Observation Generation", self):
-            self.detector.set_data_input(data_input)
+            self.detector.set_data_input_thread(data_input)
 
             with timing_context("Process Detection", self):
                 if self.cfg.run_detection:

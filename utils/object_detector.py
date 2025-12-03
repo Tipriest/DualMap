@@ -255,7 +255,7 @@ class Detector:
 
         logger.info(f"[Detector][Init] Finish Init.")
 
-    def set_data_input(self, curr_data: DataInput) -> None:
+    def set_data_input_thread(self, curr_data: DataInput) -> None:
         """设置数据输入，并在后台线程中处理它。"""
         self.curr_data = curr_data
 
@@ -270,7 +270,8 @@ class Detector:
 
     def _process_data_input_thread(self):
         """_summary_
-
+        1. 检查当前一帧的点云是否为关键帧点云
+        2. 如果是关键帧点云的话, 将RGBD图像转换为点云并附加到self.layout_pointcloud中
         """
         # Initialize prev_kf_data and layout_pointcloud
         if self.prev_keyframe_data is None:
@@ -308,7 +309,7 @@ class Detector:
                     f"[Detector][Layout] Points after downsample: {len(self.layout_pointcloud.points)}"
                 )
 
-            # Update prev_kf_data
+            # Update prev_keyframe_data
             self.prev_keyframe_data = self.curr_data.copy()
             logger.info("[Detector][Layout] Updated layout pointcloud.(已更新布局点云)")
 
@@ -409,11 +410,11 @@ class Detector:
         (根据时间间隔、位姿差异（平移）和旋转差异，检查当前帧是否应被选为关键帧。)
         """
         curr_pose = self.curr_data.pose
-        prev_kf_pose = self.prev_keyframe_data.pose
+        prev_keyframe_pose = self.prev_keyframe_data.pose
 
         # Translation check(平移检查)
         translation_diff = np.linalg.norm(
-            curr_pose[:3, 3] - prev_kf_pose[:3, 3]
+            curr_pose[:3, 3] - prev_keyframe_pose[:3, 3]
         )  # Translation difference
         if translation_diff >= 1.0:
             logger.info(
@@ -423,7 +424,7 @@ class Detector:
 
         # Rotation check(旋转检查)
         curr_rotation = R.from_matrix(curr_pose[:3, :3])
-        last_rotation = R.from_matrix(prev_kf_pose[:3, :3])
+        last_rotation = R.from_matrix(prev_keyframe_pose[:3, :3])
         rotation_diff = curr_rotation.inv() * last_rotation
         angle_diff = rotation_diff.magnitude() * (180 / np.pi)
 
@@ -435,31 +436,6 @@ class Detector:
 
         return False
 
-    def process_yolo_results(self, color, obj_classes):
-        """处理YOLO的检测结果。"""
-
-        # Perform YOLO prediction(执行YOLO预测)
-        results = self.yolo.predict(color, conf=0.2, verbose=False)
-
-        # Extract confidence scores(提取置信度分数)
-        confidence_tensor = results[0].boxes.conf
-        confidence_np = confidence_tensor.cpu().numpy()
-
-        # Extract class IDs(提取类别ID)
-        detection_class_id_tensor = results[0].boxes.cls
-        detection_class_id_np = detection_class_id_tensor.cpu().numpy().astype(int)
-
-        # Generate class labels(生成类别标签)
-        detection_class_labels = [
-            f"{obj_classes.get_classes_arr()[class_id]} {class_idx}"
-            for class_idx, class_id in enumerate(detection_class_id_np)
-        ]
-
-        # Extract bounding box coordinates(提取边界框坐标)
-        xyxy_tensor = results[0].boxes.xyxy
-        xyxy_np = xyxy_tensor.cpu().numpy()
-
-        return confidence_np, detection_class_id_np, detection_class_labels, xyxy_np
 
     def process_fastsam_results(self, color):
         """处理FastSAM的检测结果。"""
@@ -595,6 +571,43 @@ class Detector:
         )
 
         self.curr_detections = curr_detections
+
+    def process_yolo_results(self, color, obj_classes):
+        """_summary_
+
+        Args:
+            color (_type_): _description_
+            obj_classes (_type_): _description_
+
+        Returns:
+            confidence_np: 提取置信度分数
+            detection_class_id_np: 类别id
+            detection_class_labels: 类别标签
+            xyxy_np: 边界框坐标
+        """
+
+        # Perform YOLO prediction(执行YOLO预测)
+        results = self.yolo.predict(color, conf=0.2, verbose=False)
+
+        # Extract confidence scores(提取置信度分数)
+        confidence_tensor = results[0].boxes.conf
+        confidence_np = confidence_tensor.cpu().numpy()
+
+        # Extract class IDs(提取类别ID)
+        detection_class_id_tensor = results[0].boxes.cls
+        detection_class_id_np = detection_class_id_tensor.cpu().numpy().astype(int)
+
+        # Generate class labels(生成类别标签)
+        detection_class_labels = [
+            f"{obj_classes.get_classes_arr()[class_id]} {class_idx}"
+            for class_idx, class_id in enumerate(detection_class_id_np)
+        ]
+
+        # Extract bounding box coordinates(提取边界框坐标)
+        xyxy_tensor = results[0].boxes.xyxy
+        xyxy_np = xyxy_tensor.cpu().numpy()
+
+        return confidence_np, detection_class_id_np, detection_class_labels, xyxy_np
 
     def filter_fs_detections_by_curr(
         self, fs_detections, curr_detections, iou_threshold=0.5, overlap_threshold=0.6
@@ -741,7 +754,7 @@ class Detector:
 
         with timing_context("CLIP+Create Object Pointcloud", self):
             cluster_thread = threading.Thread(
-                target=self.process_masks, args=(filtered_detections.mask,)
+                target=self.process_masks_thread, args=(filtered_detections.mask,)
             )
             cluster_thread.start()
 
@@ -780,24 +793,19 @@ class Detector:
 
         self.curr_results = results
 
-    def process_masks(self, masks):
+    def process_masks_thread(self, masks):
         """
         Processes the given masks to extract and refine 3D points and colors.
-        处理给定的掩码以提取和优化 3D 点和颜色
+        处理给定的掩码以提取和优化点云和颜色
 
         Args:
-            self: The object containing configuration and data attributes.
             masks: A NumPy array of shape (N, H, W), where N is the number of masks.
-            self: 包含配置和数据属性的对象
-            masks: 形状为 (N, H, W) 的NumPy数组, 其中N是掩码的数量
-
 
         Returns:
             refined_points_list: A list of refined 3D points for each mask.
             refined_colors_list: A list of refined colors corresponding to the points for each mask.
-            refined_points_list: 每个掩码的优化后3D点列表
-            refined_colors_list: 每个掩码的对应点的优化后颜色列表
-
+            refined_points_list: 每个掩码的优化后的点云列表
+            refined_colors_list: 每个掩码的对应的点云优化后的颜色列表
         """
 
         with timing_context("Create Object Pointcloud", self):
@@ -1751,6 +1759,17 @@ class Filter:
         """获取检测结果的数量。"""
         return len(self.confidence)
 
+    def filter_by_mask_size(self):
+        """根据掩码大小过滤检测结果。"""
+        keep = self.masks_size >= self.small_mask_size
+        for idx, is_keep in enumerate(keep):
+            if not is_keep:
+                class_name = self.classes.get_classes_arr()[self.class_id[idx]]
+                logger.info(
+                    f"[Detector][Filter] 移除 {class_name} 因为掩码太小"
+                )
+        return keep
+
     def set_detections(self, keep):
         """根据保留掩码设置检测结果。"""
         if len(keep) != self.get_len():
@@ -1908,17 +1927,6 @@ class Filter:
                     f"[Detector][Filter] Removing {self.classes.get_classes_arr()[class_id]} because it is a background class."
                 )
                 keep[idx] = False
-        return keep
-
-    def filter_by_mask_size(self):
-        """根据掩码大小过滤检测结果。"""
-        keep = self.masks_size >= self.small_mask_size
-        for idx, is_keep in enumerate(keep):
-            if not is_keep:
-                class_name = self.classes.get_classes_arr()[self.class_id[idx]]
-                logger.info(
-                    f"[Detector][Filter] 移除 {class_name} 因为掩码太小"
-                )
         return keep
 
     def merge_detections(self, det, target):
