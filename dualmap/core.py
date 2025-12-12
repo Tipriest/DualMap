@@ -73,7 +73,7 @@ class Dualmap:
         # check if need to preload the global map
         if self.cfg.preload_global_map:
             logger.warning("[Core][Init] Preloading global map...")
-            self.global_map_manager.load_map()
+            self.global_map_manager.load_global_map()
 
         if self.cfg.preload_layout:
             logger.warning("[Core][Init] Preloading layout...")
@@ -94,6 +94,7 @@ class Dualmap:
         #     target=self.monitor_config_file, args=(cfg.config_file_path,)
         # )
         # self.monitor_thread.start()
+        self.monitor_thread = None
 
         # flags for monitoring
         self.calculate_path = False  # Flag for calculating global path
@@ -267,7 +268,7 @@ class Dualmap:
             self.detector.set_data_input_thread(data_input)
 
             if self.cfg.run_detection:
-                self.detector.process_detections()
+                self.detector.get_detections()
                 with timing_context("Save Detection", self):
                     if self.cfg.save_detection:
                         self.detector.save_detection_results()
@@ -294,31 +295,32 @@ class Dualmap:
             self.local_map_manager.clear_global_observations()
             self.global_map_manager.process_observations(global_obs_list)
 
+    # 根据ros timer进行周期性回调处理
     def parallel_process(self, data_input: DataInput):
         """
         Process input data in parallel.
         """
-        # Get current frame id
         self.curr_frame_id = data_input.idx
-
-        # Get current pose
         self.curr_pose = data_input.pose
 
         # Detection process
         start_time = time.time()
         with timing_context("Observation Generation", self):
+            # 处理数据输入
             self.detector.set_data_input_thread(data_input)
 
+            # 检测物体, 分离掩码处点云并分配颜色, 提取图片和标签特征
             with timing_context("Process Detection", self):
                 if self.cfg.run_detection:
                     # Run detection
-                    self.detector.process_detections()
+                    self.detector.get_detections()
                     with timing_context("Save Detection", self):
                         if self.cfg.save_detection:
                             self.detector.save_detection_results()
                 else:
                     self.detector.load_detection_results()
 
+            #
             with timing_context("Observation Formatting", self):
                 self.detector.calculate_observations()
 
@@ -642,6 +644,8 @@ class Dualmap:
             global_map_obj_num = len(self.global_map_manager.global_map)
             logger.info("[Core][EndProcess] Global Objects num: %d", global_map_obj_num)
 
+            # 提前退出机制:
+            # 当局部地图中没有待处理对象的时候，说明所有数据已经处理完毕，可以提前结束
             if local_map_obj_num == 0:
                 logger.warning(
                     "[EndProcess] End Processing End. to: %d", end_frame_id + i + 1
@@ -662,12 +666,12 @@ class Dualmap:
         if self.cfg.save_local_map:
             self.cfg.map_save_path = os.path.join(session_dir, "local_map")
             self.local_map_manager.cfg.map_save_path = self.cfg.map_save_path
-            self.local_map_manager.save_map()
+            self.local_map_manager.save_local_map()
 
         if self.cfg.save_global_map:
             self.cfg.map_save_path = os.path.join(session_dir, "global_map")
             self.global_map_manager.cfg.map_save_path = self.cfg.map_save_path
-            self.global_map_manager.save_map()
+            self.global_map_manager.save_global_map()
 
         if self.cfg.save_layout:
             self.cfg.map_save_path = os.path.join(session_dir, "layout")
@@ -805,7 +809,8 @@ class Dualmap:
 
     def stop_threading(self):
         self.stop_thread = True
-        self.monitor_thread.join()
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            self.monitor_thread.join()
 
         if self.cfg.use_parallel:
             self.mapping_thread.join()

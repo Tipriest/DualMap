@@ -274,10 +274,10 @@ class LocalMapManager(BaseMapManager):
         # 2. Insertion and Elimination of local objects in local_map
         # 3. Insertion and Elimination of nodes in graph
         """
-        管理地图和图。
-        1. 使用当前关系更新图。
-        2. 在local_map中插入和淘汰局部对象。
-        3. 在图中插入和淘汰节点。
+        管理地图和图
+        1. 使用当前关系更新图
+        2. 在local_map中插入和淘汰局部对象
+        3. 在图中插入和淘汰节点
         """
 
         # 1. Update the graph with current relations
@@ -601,9 +601,9 @@ class LocalMapManager(BaseMapManager):
         # remove the obj in the local map list(从局部地图列表中移除对象)
         self.to_be_eliminated.add(obj.uid)
 
-    def save_map(self) -> None:
+    def save_local_map(self) -> None:
         map_save_path = self.cfg.map_save_path
-        
+
         if os.path.exists(map_save_path):
             shutil.rmtree(map_save_path)
             logger.info(f"[LocalMap] Cleared the directory: {map_save_path}")
@@ -613,12 +613,12 @@ class LocalMapManager(BaseMapManager):
             if obj.save_path is not None:
                 # Update object save path to use timestamped directory
                 obj.save_path = os.path.join(map_save_path, f"local_obj_{i:04d}.pkl")
-                logger.info(f"[LocalMap] 正在保存第{i}个对象: {obj.save_path}")
+                logger.info(f"[LocalMap] Saving No.{i} obj: {obj.save_path}")
                 obj.save_to_disk()
             else:
-                logger.warning("[LocalMap] 局部对象没有保存路径")
+                logger.warning("[LocalMap] has no saved path")
                 continue
-                
+
         logger.info(f"[LocalMap] All local objects saved to: {map_save_path}")
 
     def merge_local_map(self) -> None:
@@ -1301,12 +1301,12 @@ class LocalMapManager(BaseMapManager):
             # 计算旋转矩阵差异
             delta_rotation_matrix = (
                 curr_rot @ prev_rot.T
-            )  
+            )
             # Current rotation matrix multiplied by previous frame rotation matrix transpose
             # 当前旋转矩阵乘以先前帧旋转矩阵的转置
             angle = np.arccos(
                 np.clip((np.trace(delta_rotation_matrix) - 1) / 2, -1.0, 1.0)
-            )  
+            )
             # Rotation angle (radians)
             # 旋转角度（弧度）
             delta_rotation = np.degrees(

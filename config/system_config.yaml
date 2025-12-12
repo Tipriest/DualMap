@@ -166,7 +166,7 @@ no_update: False
 ### END PROCESS CONFIG
 # if True, the system save the map objects, calculate the time cost, and end the process safely
 # In ROS mode, this will trigger the end of the system if no new data input for a while
-use_end_process: False
+use_end_process: True
 
 
 ### PARALLELIZATION
@@ -195,13 +195,13 @@ save_local_map: True
 save_global_map: True
 
 # DEBUG: save cropped images for every object
-save_cropped: False
+save_cropped: True
 
 # Enable timestamped saving for all map results
 use_timestamped_saving: True
 
 ### LAYOUT CONFIG
-layout_voxel_size: 0.05 
+layout_voxel_size: 0.05
 save_layout: True
 save_wall: True
 

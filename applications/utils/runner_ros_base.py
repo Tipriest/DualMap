@@ -42,7 +42,7 @@ class RunnerROSBase:
                 intrinsic_cfg["fx"],
                 intrinsic_cfg["fy"],
                 intrinsic_cfg["cx"],
-                intrinsic_cfg["cy"], 
+                intrinsic_cfg["cy"],
             )
             self.logger.warning("[Main] Loaded intrinsics from config.")
             return np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
@@ -139,7 +139,7 @@ class RunnerROSBase:
             current_time = current_time_fn()
             last_time = self.last_message_time
             if self.cfg.use_end_process and last_time is not None:
-                if current_time - last_time > 20.0:
+                if current_time - last_time > 5.0:
                     self.logger.warning(
                         "[Main] No new data received. Entering end process."
                     )
@@ -153,6 +153,7 @@ class RunnerROSBase:
 
         # 得到对于dualmap, 这是第几个关键帧
         data_input.idx = self.dualmap.get_keyframe_idx()
+        
 
         self.logger.info(
             "[Main] ============================================================"

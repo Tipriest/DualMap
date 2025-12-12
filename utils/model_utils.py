@@ -34,12 +34,12 @@ def compute_clip_features(
         y_min -= top_padding
         y_max += bottom_padding
 
-        cropped_image = image.crop((x_min, y_min, x_max, y_max))
+        _cropped_image = image.crop((x_min, y_min, x_max, y_max))
         # add cropped into the list
-        image_crops.append(cropped_image)
+        image_crops.append(_cropped_image)
 
         # image CLIP feat
-        clip_pre_image = clip_preprocess(cropped_image).unsqueeze(0).to(device)
+        clip_pre_image = clip_preprocess(_cropped_image).unsqueeze(0).to(device)
         crop_feat = clip_model.encode_image(clip_pre_image)
         crop_feat /= crop_feat.norm(dim=-1, keepdim=True)
 
@@ -126,10 +126,10 @@ def compute_clip_features_batched(
         y_max += bottom_padding
 
         # Crop the image
-        cropped_image = image.crop((x_min, y_min, x_max, y_max))
+        _cropped_image = image.crop((x_min, y_min, x_max, y_max))
 
         # Preprocess the cropped image
-        preprocessed_image = clip_preprocess(cropped_image).unsqueeze(0)
+        preprocessed_image = clip_preprocess(_cropped_image).unsqueeze(0)
         preprocessed_images.append(preprocessed_image)
 
         # Get the class id for the detection
@@ -139,7 +139,7 @@ def compute_clip_features_batched(
         text_tokens.append(classes[class_id])
 
         # Append the cropped image to the image crops list
-        image_crops.append(cropped_image)
+        image_crops.append(_cropped_image)
 
     # Convert lists to batches
     preprocessed_images_batch = torch.cat(preprocessed_images, dim=0).to(device)

@@ -26,7 +26,7 @@ class LocalObjStatus(Enum):
     PENDING = "pending for updating"
     ELIMINATION = "elimination"
     LM_ELIMINATION = "elimination for low mobility"
-    HM_ELIMINATION = "elimination for high mpbility"
+    HM_ELIMINATION = "elimination for high mobility"
     WAITING = "waiting for stable obj process"
 
 
@@ -41,7 +41,7 @@ class BaseObject:
 
         # obs info
         self.observed_num = 0
-        self.observations: List[str] = []
+        self.observations:List[Observation] = []
 
         # Spatial primitives
         self.pcd: Optional[o3d.geometry.PointCloud] = o3d.geometry.PointCloud()
@@ -90,7 +90,7 @@ class BaseObject:
         self.nav_goal = state.get("nav_goal")
 
         self.observed_num = 0
-        self.observations: List[str] = []
+        self.observations:List[Observation] = []
 
         self.save_path = self._initialize_save_path()
 
@@ -122,8 +122,37 @@ class BaseObject:
     def copy(self):
         return copy.deepcopy(self)
 
-    def save_to_disk(self):
+    # def save_to_disk(self):
+    #     """Save the object to disk using pickle."""
+    #     with open(self.save_path, "wb") as f:
+    #         pickle.dump(self, f)
+
+    #     if self._cfg.save_cropped:
+    #         # save the cropped image in the observation
+    #         save_dir = self._cfg.map_save_path
+    #         save_dir = os.path.join(save_dir, f"{self.class_id}_{self.uid}")
+    #         cropped_save_dir = os.path.join(save_dir, "cropped")
+    #         masked_save_dir = os.path.join(save_dir, "masked")
+    #         os.makedirs(cropped_save_dir, exist_ok=True)
+    #         os.makedirs(masked_save_dir, exist_ok=True)
+    #         for obs in self.observations:
+    #             obs_idx = obs.idx
+    #             cropped_image = obs.cropped_image
+    #             masked_image = obs.masked_image
+    #             cropped_image_dir = os.path.join(cropped_save_dir, f"{obs_idx}.png")
+    #             masked_image_dir = os.path.join(masked_save_dir, f"{obs_idx}.png")
+    #             # both cropped and masked images are np.ndarray, so save as png
+    #             import imageio
+
+    #             imageio.imwrite(cropped_image_dir, cropped_image)
+    #             imageio.imwrite(masked_image_dir, masked_image)
+
+    def save_obj_to_disk(self):
         """Save the object to disk using pickle."""
+        if self.save_path is None:
+            logger.warning("[BaseObject] save_path is None, skipping save_to_disk")
+            return
+
         with open(self.save_path, "wb") as f:
             pickle.dump(self, f)
 
@@ -135,8 +164,8 @@ class BaseObject:
             masked_save_dir = os.path.join(save_dir, "masked")
             os.makedirs(cropped_save_dir, exist_ok=True)
             os.makedirs(masked_save_dir, exist_ok=True)
-            for obs in self.observations:
-                obs_idx = obs.idx
+            for obs_idx, obs in enumerate(self.observations):
+                # obs_idx = obs.idx
                 cropped_image = obs.cropped_image
                 masked_image = obs.masked_image
                 cropped_image_dir = os.path.join(cropped_save_dir, f"{obs_idx}.png")
@@ -818,7 +847,10 @@ class GlobalObject(BaseObject):
         self.observed_num += 1
 
     def get_latest_observation(self) -> Observation:
-        return self.observations[-1] if self.observations else None
+        if self.observations:
+            return self.observations[-1]
+        else:
+            return None
 
     def update_info(self) -> None:
         # Global Obj

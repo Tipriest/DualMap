@@ -69,15 +69,23 @@ class Tracker:
         # Find relationships between current observations and previous map
 
         if self.__is_global:
+            # 全局匹配模式:
+                # 使用2D bounding box 的交集比率判断
+                # 适用于全局地图的跨空间匹配
+                # 不考虑视觉特征（因为全局尺度下视觉可能变化大）
             # for global matching we use geometry only
+            # 计算2D BBox的空间相似度
             spatial_sim_mat = self.compute_global_spatial_sim()
 
+            # 转置矩阵：从 (map, curr) → (curr, map)
             sim_mat = spatial_sim_mat.T
 
+            # 更新观测的匹配信息
             self.update_global_obs_with_sim_mat(sim_mat)
 
         else:
             if is_map_only:
+                # 地图合并模式
                 spatial_sim_mat = self.compute_overlap_spatial_sim()
 
                 graph = spatial_sim_mat > self.cfg.merge_sim_threshold

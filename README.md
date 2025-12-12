@@ -15,18 +15,21 @@
     - 语义地图层次关系
 - 生成文件
   - layout点云布局
-  - 
+  -
   - 语义地图对象列表
   - 所有类别物体的数量(class_num.json)
 - 验证
   - 生成地图之后使用脚本，判断检测率和位置平均检测偏差，最好能够在一张图上打印出来，或者在多张图上打印出来
-  - 
+  -
   - 生成之后查看生成的树状关系图，最好能够用某种方式展示出来，可以用节点拉伸打开这样子
   - 生成之后查看
 - 需要负责的任务
   - YOLO扩展与增训
   - 检测准确度排查
   - 分层的层次地图
+
+## 二. 存在的问题
+1. 看一个杂乱一点的地方时间很长很长之后(1000多个keyframe), 内存消耗会爆炸
 
 
 
@@ -81,10 +84,10 @@ cd ../..
 ### 💾 使用数据集运行
 
 DualMap 支持使用**离线数据集**运行。当前支持的数据集包括：
-1. Replica 数据集  
-2. ScanNet 数据集  
-3. TUM RGB-D 数据集  
-4. 使用 [Habitat Data Collector](https://github.com/Eku127/habitat-data-collector) 自行采集的数据  
+1. Replica 数据集
+2. ScanNet 数据集
+3. TUM RGB-D 数据集
+4. 使用 [Habitat Data Collector](https://github.com/Eku127/habitat-data-collector) 自行采集的数据
 
 对于从您自己的平台采集的数据，您可以按类似格式组织以运行系统。
 

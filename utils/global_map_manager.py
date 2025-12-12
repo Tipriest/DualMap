@@ -151,7 +151,7 @@ class GlobalMapManager(BaseMapManager):
 
         pass
 
-    def save_map(self) -> None:
+    def save_global_map(self) -> None:
         map_save_path = self.cfg.map_save_path
 
         if os.path.exists(map_save_path):
@@ -163,10 +163,10 @@ class GlobalMapManager(BaseMapManager):
             # Update object save path to use timestamped directory
             obj.save_path = os.path.join(map_save_path, f"global_obj_{i:04d}.pkl")
             logger.info(f"[GlobalMap] Saving No.{i} obj: {obj.save_path}")
-            obj.save_to_disk()
+            obj.save_obj_to_disk()
 
         logger.info(f"[GlobalMap] All global objects saved to: {map_save_path}")
-        
+
     def save_wall(self, layout_pcd) -> None:
         map_save_path = self.cfg.map_save_path
         # Create timestamped directory
@@ -189,7 +189,7 @@ class GlobalMapManager(BaseMapManager):
             logger.info(f"[GlobalMap] Wall PCD didn't saved to: {map_save_path}")
             logger.info("self.layout_map.wall_pcd is  None")
 
-    def load_map(self) -> None:
+    def load_global_map(self) -> None:
         """
         Load saved global map objects. If preload path exists, use it first;
         otherwise use default save path. If directory doesn't exist or is empty, do nothing.
@@ -296,11 +296,24 @@ class GlobalMapManager(BaseMapManager):
         return data_records
 
     def visualize_global_map(self) -> None:
+        """
+        全局地图的可视化核心函数，使用 Rerun 可视化工具将地图中的所有元素渲染出来
+        这个函数负责可视化:
+            1.墙壁点云
+            2.预加载路径
+            3.全局对象(点云、2D/3D边界框)
+            4.对象之间的关系
+            5.导航路径
+        """
+        # 记录本次渲染的所有实体，用于后续清理未使用的旧实体
         new_logged_entities = set()
-
+        # 路径线条的半径(粗细)
         path_radii = self.cfg.path_radii
 
-        # show the preload wall pcd
+        # 1. 可视化预加载墙壁
+        # 作用：只渲染一次墙壁点云(静态场景元素)
+        # 使用灰色 (169, 169, 169) 表示墙壁
+        # 设置标志位防止重复渲染
         if self.vis_preload_wall_ok is False:
             if self.layout_map.wall_pcd is not None:
                 self.visualizer.log(
@@ -313,7 +326,12 @@ class GlobalMapManager(BaseMapManager):
                 )
                 self.vis_preload_wall_ok = True
 
+        # 2. 可视化预加载路径
         if self.preload_path_ok is False and self.cfg.use_given_path:
+            # 作用：加载并渲染预定义的多条路径
+                # 从 JSON 文件读取路径坐标
+                # 使用 LineStrips3D 连接路径点
+                # 只执行一次(静态路径)
             json_data = self.read_json_files(self.cfg.given_path_dir)
             # traverse all the json data
             for key, value in json_data.items():
@@ -346,21 +364,26 @@ class GlobalMapManager(BaseMapManager):
 
             self.preload_path_ok = True
 
+        # 3. 可视化全局对象(核心部分)
+        # 遍历全局地图中的对象
         for global_obj in self.global_map:
             base_entity_path = "global/objects"
 
+            # 获取对象信息
             obj_name = self.visualizer.obj_classes.get_classes_arr()[
                 global_obj.class_id
             ]
             positions = np.asarray(global_obj.pcd_2d.points)
             colors = np.asarray(global_obj.pcd_2d.colors) * 255
             colors = colors.astype(np.uint8)
-            curr_obj_color = self.visualizer.obj_classes.get_class_color(obj_name)
 
+            # 动态颜色设置
+            curr_obj_color = self.visualizer.obj_classes.get_class_color(obj_name)
+            # 导航目标标记为红色
             if global_obj.nav_goal:
                 # set red
                 curr_obj_color = (255, 0, 0)
-
+            # 如果有导航路径，非目标对象变灰
             if self.nav_graph is not None and self.nav_graph.pos_path is not None:
                 if global_obj.nav_goal:
                     # set red
@@ -371,7 +394,7 @@ class GlobalMapManager(BaseMapManager):
             # Get current related num
             related_num = len(global_obj.related_objs)
 
-            # log pcd data
+            # 渲染点云
             rgb_pcd_entity = base_entity_path + "/rgb_pcd" + f"/{global_obj.uid}"
             self.visualizer.log(
                 rgb_pcd_entity,
@@ -385,7 +408,10 @@ class GlobalMapManager(BaseMapManager):
                     uuid=str(global_obj.uid),
                 ),
             )
-
+            # 特点:
+            # 每个对象使用唯一 UID 作为路径
+            # 附加元数据（UUID）便于交互查询
+            # 渲染2D边界框
             bbox_2d = global_obj.bbox_2d
             centers = [bbox_2d.get_center()]
             half_sizes = [bbox_2d.get_extent() / 2]
@@ -408,6 +434,7 @@ class GlobalMapManager(BaseMapManager):
             )
 
             # log related bbox
+            # 渲染关联对象
             s = 0.04
             fixed_half_size = np.array([s, s, s])
             for i, related_bbox in enumerate(global_obj.related_bbox):
@@ -416,6 +443,7 @@ class GlobalMapManager(BaseMapManager):
                 center_changed = [center[0], center[1], self.cfg.related_height]
 
                 # centers = [related_bbox.get_center()]
+                # 获取关联对象的颜色
                 centers = [center_changed]
 
                 half_sizes = [fixed_half_size]
@@ -425,6 +453,7 @@ class GlobalMapManager(BaseMapManager):
                 obj_name = self.visualizer.obj_classes.get_classes_arr()[class_id]
                 obj_color = self.visualizer.obj_classes.get_class_color(obj_name)
 
+                # 1️⃣ 渲染关联对象的小边界框
                 related_bbox_entity = (
                     base_entity_path + "/related_bbox" + f"/{global_obj.uid}_{i}"
                 )
@@ -440,11 +469,13 @@ class GlobalMapManager(BaseMapManager):
                     self.visualizer.AnyValues(uuid=str(global_obj.uid)),
                 )
 
+                # 2️⃣ 渲染关联对象的标签
+                # Increase Z axis value
                 center_tilted = [
                     center[0],
                     center[1],
                     self.cfg.related_height + 0.1,
-                ]  # Increase Z axis value
+                ]
                 s = 0.01
                 title_half_size = np.array([s, s, s])
 
@@ -464,6 +495,8 @@ class GlobalMapManager(BaseMapManager):
                     self.visualizer.AnyValues(uuid=str(global_obj.uid)),
                 )
 
+
+                # 3️⃣ 渲染连接线(从地面到悬浮高度)
                 related_line_entity = (
                     base_entity_path + "/related_line" + f"/{global_obj.uid}_{i}"
                 )
@@ -487,6 +520,7 @@ class GlobalMapManager(BaseMapManager):
                 new_logged_entities.add(related_line_entity)
                 new_logged_entities.add(related_title_entity)
 
+            # 可选：渲染3D边界框
             if self.cfg.show_global_map_3d_bbox:
                 bbox_3d = global_obj.pcd.get_axis_aligned_bounding_box()
                 centers = [bbox_3d.get_center()]
@@ -510,6 +544,10 @@ class GlobalMapManager(BaseMapManager):
             new_logged_entities.add(bbox_entity)
 
         # Draw the global path if available
+        # 4. 可视化全局导航路径
+        # 渲染从起点到目标的全局路径
+        # 默认颜色：global_path_color
+        # 如果有动作路径：变为浅绿色且更粗
         global_path_entity = "world/global_path"
         if self.nav_graph is not None and self.nav_graph.pos_path is not None:
             # Create a list of 3D points from the pos_path
@@ -534,6 +572,8 @@ class GlobalMapManager(BaseMapManager):
             )
             new_logged_entities.add(global_path_entity)
 
+        # 5. 可视化动作路径
+        # 作用：渲染机器人当前执行的局部路径
         action_path_entity = "world/action_path"
         if self.action_path is not None:
             # Create a list of 3D points from the pos_path
@@ -552,6 +592,10 @@ class GlobalMapManager(BaseMapManager):
             )
             new_logged_entities.add(action_path_entity)
 
+        # 6. 清理未使用的实体
+            # 比较上一帧和当前帧的实体列表
+            # 删除不再存在的对象（例如被删除的对象）
+            # 防止可视化窗口中累积无效数据
         if len(self.prev_entities) != 0:
             for entity_path in self.prev_entities:
                 if entity_path not in new_logged_entities:

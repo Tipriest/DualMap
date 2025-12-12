@@ -14,9 +14,9 @@ ros_rate: 15
 # Path to ROS topic configuration file
 ros_stream_config_path: ./config/data_config/ros/self_collected.yaml
 
-# If RGB & Depth topics are published as compressed image topics, set to true
-# If false, topics are expected to be raw image topics
-use_compressed_topic: false
+# If RGB & Depth topics are published as compressed image topics, set to True
+# If False, topics are expected to be raw image topics
+use_compressed_topic: False
 
 # Maximum allowed time difference (in seconds) between synchronized topics
 sync_threshold: 0.1
@@ -40,7 +40,7 @@ use_fastsam: False
 
 # Detection Refinement
 # skip refinement will be faster but less accurate
-skip_refinement: false
+skip_refinement: False
 
 ## Visualization
 # Enable Rerun visualization
@@ -50,7 +50,7 @@ use_rviz: False
 
 ## Parallelization
 # Use parallel processing (False = sequential)
-use_parallel: true
+use_parallel: True
 
 
 # ============================================================
@@ -58,24 +58,29 @@ use_parallel: true
 # ============================================================
 # If True, run local mapping only and get local map
 # If False, run both local and global mapping and get global map
-run_local_mapping_only: false
+run_local_mapping_only: False
 
 # Save the generated local map
-save_local_map: false
+save_local_map: False
 
 # Save the global map (set False if run_local_mapping_only is True)
-save_global_map: true
+save_global_map: True
+save_layout: True
+save_wall: True
 
-
+# DEBUG: save cropped images for every object
+save_cropped: True
+# Save detection results to disk
+save_detection: False
 # ============================================================
 # PRELOADING CONFIG
 # ============================================================
 # Preload an existing global map from disk
-preload_global_map: false
+preload_global_map: False
 
 # Preload an existing layout pcd and wall pcd from disk
 # If preload the layout, the layout pcd thread will be disabled
-preload_layout: false
+preload_layout: False
 
 # Path to preload map data.
 # If empty, the system will use the default preload path
@@ -84,5 +89,5 @@ preload_layout: false
 preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20251128_211208"
 
 # Preload action paths for visualization
-use_given_path: false
+use_given_path: False
 given_path_dir: ""

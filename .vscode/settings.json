@@ -1,7 +1,86 @@
 {
-    "git.detectSubmodules": false,
-    "git.ignoredRepositories": [
-        "**/3rdparty/habitat-data-collector",
-        "**/3rdparty/mobileclip"
-    ]
+  // "editor.tabSize": 8,
+  // "editor.rulers": [100],
+  // "editor.defaultFormatter": "zachflower.uncrustify",
+  // "files.associations": {
+  //   "*.repos": "yaml",
+  //   "*.world": "xml",
+  //   "*.xacro": "xml"
+  // },
+  // // Autocomplete from ros python packages
+  // "python.autoComplete.extraPaths": [
+  //   "/opt/ros/humble/lib/python3.10/site-packages/"
+  // ],
+  // // Environment file lets vscode find python files within workspace
+  // "python.envFile": "${workspaceFolder}/.env",
+  // // Use the system installed version of autopep8
+  // "python.formatting.autopep8Path": "/usr/bin/autopep8",
+  // "python.formatting.autopep8Args": ["--max-line-length=100"],
+  // "C_Cpp.default.intelliSenseMode": "clang-x64",
+  // "C_Cpp.formatting": "Disabled",
+  // "uncrustify.useReplaceOption": true,
+  // "uncrustify.configPath.linux": "/opt/ros/humble/lib/python3.10/site-packages/ament_uncrustify/configuration/ament_code_style.cfg",
+  // "[cpp]": {
+  //   "editor.defaultFormatter": "zachflower.uncrustify",
+  //   "editor.formatOnSave": true
+  // },
+  // "cSpell.words": [
+  //   "RTPS",
+  //   "athackst",
+  //   "autopep",
+  //   "cmake",
+  //   "cppcheck",
+  //   "cpplint",
+  //   "deque",
+  //   "devcontainer",
+  //   "ints",
+  //   "noqa",
+  //   "pytest",
+  //   "rclcpp",
+  //   "rclpy",
+  //   "repos",
+  //   "rosdistro",
+  //   "rosidl",
+  //   "uncrustify",
+  //   "xmllint"
+  // ],
+  // "search.exclude": {
+  //   "**/node_modules": true,
+  //   "**/bower_components": true,
+  //   "**/*.code-search": true,
+  //   "**/build": true,
+  //   "**/install": true,
+  //   "**/log": true
+  // },
+  // "python.analysis.extraPaths": [
+  //   "/opt/ros/humble/lib/python3.10/site-packages/"
+  // ],
+  "workbench.colorCustomizations": {
+    "activityBar.activeBackground": "#035a90",
+    "activityBar.background": "#035a90",
+    "activityBar.foreground": "#e7e7e7",
+    "activityBar.inactiveForeground": "#e7e7e799",
+    "activityBarBadge.background": "#fa24a8",
+    "activityBarBadge.foreground": "#e7e7e7",
+    "commandCenter.border": "#e7e7e799",
+    "sash.hoverBorder": "#035a90",
+    "statusBar.background": "#023b5e",
+    "statusBar.foreground": "#e7e7e7",
+    "statusBarItem.hoverBackground": "#035a90",
+    "statusBarItem.remoteBackground": "#023b5e",
+    "statusBarItem.remoteForeground": "#e7e7e7",
+    "titleBar.activeBackground": "#023b5e",
+    "titleBar.activeForeground": "#e7e7e7",
+    "titleBar.inactiveBackground": "#023b5e99",
+    "titleBar.inactiveForeground": "#e7e7e799"
+  },
+  "peacock.color": "#023b5e",
+  "ros.distro": "humble",
+  "python.linting.pylintArgs": [
+    "--disable=C0103,C0114,C0115,C0116,C0303,C0411,C0413,C0415,W0621,W0718,W1203,W1514,R0914,E1131",
+    "--extension-pkg-allow-list=cv2",
+    "--max-line-length=110"
+  ],
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": true
 }

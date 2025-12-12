@@ -436,7 +436,6 @@ class Detector:
 
         return False
 
-
     def process_fastsam_results(self, color):
         """处理FastSAM的检测结果。"""
         results = self.fastsam(
@@ -545,7 +544,11 @@ class Detector:
         self.fastsam_detections = fs_detections
 
     def process_yolo_and_sam(self, color):
-        """运行YOLO和SAM并处理它们的结果。"""
+        """_summary_
+            运行yolo和sam, 得到待检测物体的边界框点, 检测置信度, 类别id, masks
+        Args:
+            color (_type_): _description_
+        """
         with timing_context("YOLO", self):
             confidence, class_id, class_labels, xyxy = self.process_yolo_results(
                 color, self.obj_classes
@@ -712,8 +715,10 @@ class Detector:
         )
         return merged_detctions
 
-    def process_detections(self):
-        """处理所有检测, 包括YOLO, SAM, FastSAM, 和 CLIP """
+    def get_detections(self):
+        """处理所有检测, 包括YOLO, SAM, FastSAM, 和 CLIP
+            获得self.curr_results
+        """
 
         color = self.curr_data.color.astype(np.uint8)
 
@@ -725,13 +730,14 @@ class Detector:
                 )
                 fastsam_thread.start()
 
-            # Run YOLO and SAM
+            # Run YOLO and SAM, 获得self.curr_detections
             self.process_yolo_and_sam(color)
 
             # Waiting for FastSAM to finish
             if self.cfg.use_fastsam:
                 fastsam_thread.join()
 
+        # 过滤一些detections
         with timing_context("Detection Filter", self):
             self.filter.update_detections(self.curr_detections, color)
             filtered_detections = self.filter.run_filter()
@@ -796,7 +802,7 @@ class Detector:
     def process_masks_thread(self, masks):
         """
         Processes the given masks to extract and refine 3D points and colors.
-        处理给定的掩码以提取和优化点云和颜色
+        处理掩码列表以提取掩码列表中每一个掩码位置处的点云和颜色，最后返回点云列表和颜色列表
 
         Args:
             masks: A NumPy array of shape (N, H, W), where N is the number of masks.
@@ -1082,7 +1088,10 @@ class Detector:
     def calculate_observations(
         self,
     ) -> None:
-        """根据当前检测结果计算观测。"""
+        """_summary_
+        获取每一个mask对应点云的包围盒, 过滤掉接近天花板的mask
+        对每一个mask都会做一个LocalObservation的数据结构
+        """
         # 如果没有检测结果，直接返回
         if not self.curr_results:
             logger.warning("[Detector] 没有检测结果，无法计算观测")
@@ -1165,15 +1174,15 @@ class Detector:
                 # crop image by xyxy
                 # 根据xyxy裁剪图像
                 x1, y1, x2, y2 = map(int, curr_obs.xyxy)
-                cropped_image = whole_image[y1:y2, x1:x2]
+                _cropped_image = whole_image[y1:y2, x1:x2]
                 cropped_mask = curr_obs.mask[y1:y2, x1:x2].astype(np.uint8) * 255
 
                 masked_image = cv2.bitwise_and(
-                    cropped_image, cropped_image, mask=cropped_mask
+                    _cropped_image, _cropped_image, mask=cropped_mask
                 )
 
                 curr_obs.masked_image = masked_image
-                curr_obs.cropped_image = cropped_image
+                curr_obs.cropped_image = _cropped_image
 
             # Add observation to the list(将观测添加到列表)
             self.curr_observations.append(curr_obs)
@@ -1512,7 +1521,6 @@ class Detector:
         pose_translation = np.array(pose[:3, 3])  # Extract translation (x, y, z)
 
         # Calculate the Euclidean distance between the pose translation and the bbox center
-        # FIXME: 这里是在算啥?
         distance = np.linalg.norm(bbox_center - pose_translation)
 
         return distance

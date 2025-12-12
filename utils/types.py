@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 
-
 @dataclass
 class DataInput:
     """
@@ -52,7 +51,6 @@ class DataInput:
         """返回对象的深拷贝。"""
         return copy.deepcopy(self)
 
-
 @dataclass
 class Observation:
     """
@@ -79,7 +77,6 @@ class Observation:
     matched_obj_uid: None = None
     matched_obj_score: float = 0.0
     matched_obj_idx: int = -1
-
 
 @dataclass
 class LocalObservation(Observation):
@@ -113,7 +110,6 @@ class LocalObservation(Observation):
         default_factory=lambda: np.empty((0, 0, 3), dtype=np.uint8)
     )
 
-
 @dataclass
 class GlobalObservation(Observation):
     """
@@ -140,10 +136,9 @@ class GlobalObservation(Observation):
     related_bbox: list = field(default_factory=list)
     related_color: list = field(default_factory=list)
 
-
 class ObjectClasses:
     """
-    管理对象类别及其关联颜色 
+    管理对象类别及其关联颜色
 
     为类别文件创建颜色映射, 同时管理背景类型的显示与否, 默认背景类别为 [floor, wall, ceiling] 地板, 墙和天花板
 
@@ -264,7 +259,6 @@ class ObjectClasses:
             str(i): self.class_to_color[self.classes[i]]
             for i in range(len(self.classes))
         }
-
 
 class GoalMode(Enum):
     RANDOM = "random"
