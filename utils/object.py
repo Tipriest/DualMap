@@ -58,6 +58,10 @@ class BaseObject:
         self.class_id: Optional[int] = None
         self.class_name: Optional[str] = None
 
+        # aggregated debug images from observations
+        self.cropped_image: Optional[np.ndarray] = None
+        self.masked_image: Optional[np.ndarray] = None
+
         # Initialize save_path
         self.save_path = self._initialize_save_path()
 
@@ -76,6 +80,12 @@ class BaseObject:
             "class_name": self.class_name,
             "nav_goal": self.nav_goal,
             "pose": self.pose.tolist() if self.pose is not None else None,
+            "cropped_image": self.cropped_image.tolist()
+            if self.cropped_image is not None
+            else None,
+            "masked_image": self.masked_image.tolist()
+            if self.masked_image is not None
+            else None,
         }
         return state
 
@@ -99,6 +109,16 @@ class BaseObject:
         # Restore pose
         pose_data = state.get("pose")
         self.pose = np.array(pose_data) if pose_data is not None else None
+
+        # Restore aggregated images
+        cropped = state.get("cropped_image")
+        masked = state.get("masked_image")
+        self.cropped_image = (
+            np.array(cropped, dtype=np.uint8) if cropped is not None else None
+        )
+        self.masked_image = (
+            np.array(masked, dtype=np.uint8) if masked is not None else None
+        )
 
         self.observed_num = 0
         self.observations:List[Observation] = []
@@ -158,7 +178,7 @@ class BaseObject:
     #             imageio.imwrite(cropped_image_dir, cropped_image)
     #             imageio.imwrite(masked_image_dir, masked_image)
 
-    def save_obj_to_disk(self):
+    def save_obj_to_disk(self, save_sub_path:str):
         """Save the object to disk using pickle."""
         if self.save_path is None:
             logger.warning("[BaseObject] save_path is None, skipping save_to_disk")
@@ -170,7 +190,7 @@ class BaseObject:
         if self._cfg.save_cropped:
             # save the cropped image in the observation
             save_dir = self._cfg.map_save_path
-            save_dir = os.path.join(save_dir, f"{self.class_id}_{self.uid}")
+            save_dir = os.path.join(save_dir, save_sub_path)
             cropped_save_dir = os.path.join(save_dir, "cropped")
             masked_save_dir = os.path.join(save_dir, "masked")
             os.makedirs(cropped_save_dir, exist_ok=True)
@@ -393,6 +413,10 @@ class LocalObject(BaseObject):
             self.clip_ft = latest_obs.clip_ft
             self.class_id = latest_obs.class_id
             self.is_low_mobility = latest_obs.is_low_mobility
+
+            # aggregate images from first observation
+            self.cropped_image = getattr(latest_obs, "cropped_image", None)
+            self.masked_image = getattr(latest_obs, "masked_image", None)
             return
 
         # Split dict update
@@ -421,6 +445,10 @@ class LocalObject(BaseObject):
 
         # Update spatial stable info list
         self.update_spatial_stable_info(latest_obs)
+
+        # aggregate images from latest observation (fallback to previous if missing)
+        self.cropped_image = getattr(latest_obs, "cropped_image", self.cropped_image)
+        self.masked_image = getattr(latest_obs, "masked_image", self.masked_image)
 
         # Get major class id
         # get class id list
@@ -892,9 +920,9 @@ class GlobalObject(BaseObject):
 
             self.related_objs = latest_obs.related_objs
 
-            # for visualization in rerun
-            self.related_bbox = latest_obs.related_bbox
-            self.related_color = latest_obs.related_color
+            # aggregate images from first global observation
+            self.cropped_image = getattr(latest_obs, "cropped_image", None)
+            self.masked_image = getattr(latest_obs, "masked_image", None)
             return
 
         # Update the information for outside

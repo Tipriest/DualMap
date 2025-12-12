@@ -180,9 +180,9 @@ class GlobalMapManager(BaseMapManager):
 
         for i, obj in enumerate(self.global_map):
             # Update object save path to use timestamped directory
-            obj.save_path = os.path.join(map_save_path, f"global_obj_{i:04d}.pkl")
+            obj.save_path = os.path.join(map_save_path, f"global_obj_{i:04d}_{obj.class_name}.pkl")
             logger.info(f"[GlobalMap] Saving No.{i} obj: {obj.save_path}")
-            obj.save_obj_to_disk()
+            obj.save_obj_to_disk(f"global_obj_{i:04d}_{obj.class_name}")
 
         logger.info(f"[GlobalMap] All global objects saved to: {map_save_path}")
 
@@ -276,7 +276,8 @@ class GlobalMapManager(BaseMapManager):
             logger.info(
                 f"[GlobalMap] Preload wall path not found. Using default map save path: {load_dir}"
             )
-
+        load_dir = os.path.join(load_dir, "wall")
+        
         wall_pcd_path = os.path.join(load_dir, "wall.pcd")
 
         if not Path(wall_pcd_path).is_file():

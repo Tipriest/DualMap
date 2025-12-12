@@ -375,6 +375,7 @@ class Detector:
             logger.info(
                 f"[Detector][Layout] 未找到预加载布局路径。使用默认地图保存路径: {load_dir}"
             )
+        load_dir = os.path.join(load_dir, "layout")
 
         # Build layout point cloud file path
         layout_pcd_path = os.path.join(load_dir, "layout.pcd")

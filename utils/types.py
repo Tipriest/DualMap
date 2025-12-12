@@ -91,8 +91,8 @@ class LocalObservation(Observation):
         conf (float): 置信度
         distance (float): 物体到相机的距离
         is_low_mobility (bool): 是否为低移动性物体
-        masked_image (np.ndarray): 掩码后的图像（用于调试）
-        cropped_image (np.ndarray): 裁剪后的图像（用于调试）
+        masked_image (np.ndarray): 掩码后的图像(用于调试)
+        cropped_image (np.ndarray): 裁剪后的图像(用于调试)
     """
 
     idx: int = 0
@@ -121,12 +121,12 @@ class GlobalObservation(Observation):
         pcd_2d (o3d.geometry.PointCloud): 2D点云
         bbox_2d (o3d.geometry.AxisAlignedBoundingBox): 2D轴对齐包围盒
         related_objs (list): 相关对象的CLIP特征列表
-        related_bbox (list): 相关对象的包围盒列表（用于演示）
-        related_color (list): 相关对象的颜色列表（用于演示）
-        masked_image (np.ndarray): 单个掩码后的图像（用于调试）
-        cropped_image (np.ndarray): 单个裁剪后的图像（用于调试）
-        masked_images (list): 掩码后的图像列表，每个元素为 np.ndarray (H, W, 3), uint8类型（用于调试）
-        cropped_images (list): 裁剪后的图像列表，每个元素为 np.ndarray (H, W, 3), uint8类型（用于调试）
+        related_bbox (list): 相关对象的包围盒列表(用于演示)
+        related_color (list): 相关对象的颜色列表(用于演示)
+        masked_image (np.ndarray): 单个掩码后的图像(用于调试)
+        cropped_image (np.ndarray): 单个裁剪后的图像(用于调试)
+        masked_images (list): 掩码后的图像列表，每个元素为 np.ndarray (H, W, 3), uint8类型(用于调试)
+        cropped_images (list): 裁剪后的图像列表，每个元素为 np.ndarray (H, W, 3), uint8类型(用于调试)
     """
 
     uid: uuid.UUID = field(default_factory=uuid.uuid4)

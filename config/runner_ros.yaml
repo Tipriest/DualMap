@@ -80,13 +80,13 @@ preload_global_map: True
 
 # Preload an existing layout pcd and wall pcd from disk
 # If preload the layout, the layout pcd thread will be disabled
-preload_layout: False
+preload_layout: True
 
 # Path to preload map data.
 # If empty, the system will use the default preload path
 # preload_path: ""
 # preload_path: "dataset/HM3D_collect/00829-QaLdnwvtxbs/global_map/hm3d"
-preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20251212_192513"
+preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20251212_195007"
 
 # Preload action paths for visualization
 use_given_path: False
