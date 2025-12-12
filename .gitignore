@@ -18,6 +18,6 @@ __pycache__/
 *.pt
 *.bin
 
-.vscode/
+# .vscode/
 
 .history
