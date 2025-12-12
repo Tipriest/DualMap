@@ -298,7 +298,9 @@ class Dualmap:
     # 根据ros timer进行周期性回调处理
     def parallel_process(self, data_input: DataInput):
         """
-        Process input data in parallel.
+        其实这里就是运行一个detections去计算所有的observations, 然后把observations
+        放到detection_results_queue中, 然后由mapping_thread消耗掉
+        detection_results_queue中的observations, 运行local_mapping和global_mapping
         """
         self.curr_frame_id = data_input.idx
         self.curr_pose = data_input.pose
@@ -515,7 +517,8 @@ class Dualmap:
 
     def run_mapping_thread(self):
         """
-        Independent thread: Monitor detection results and process local mapping and global mapping.
+        其实这里就是拿一下parallel_process处理结果的observations,
+        然后运行local_mapping和global_mapping把observations变换为local_object和global_object, 在local_object中进行匹配, 取出低移动性的物体的observation传入到global_mapping中
         """
         while not self.stop_thread:
             try:

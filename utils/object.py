@@ -17,6 +17,8 @@ from omegaconf import DictConfig
 # Local module imports
 from utils.types import Observation
 
+import imageio
+
 # Set up the module-level logger
 logger = logging.getLogger(__name__)
 
@@ -54,12 +56,14 @@ class BaseObject:
 
         # class id
         self.class_id: Optional[int] = None
+        self.class_name: Optional[str] = None
 
         # Initialize save_path
         self.save_path = self._initialize_save_path()
 
         # is navigation goal flag
         self.nav_goal = False
+        self.pose = None  # pose as (x, y, z) numpy array or None
 
     def __getstate__(self):
         # Prepare the state dictionary for serialization
@@ -69,7 +73,9 @@ class BaseObject:
             "pcd_colors": np.asarray(self.pcd.colors).tolist(),  # Convert to list
             "clip_ft": self.clip_ft.tolist(),
             "class_id": self.class_id,
+            "class_name": self.class_name,
             "nav_goal": self.nav_goal,
+            "pose": self.pose.tolist() if self.pose is not None else None,
         }
         return state
 
@@ -87,7 +93,12 @@ class BaseObject:
 
         self.clip_ft = np.array(state.get("clip_ft"))
         self.class_id = state.get("class_id")
+        self.class_name = state.get("class_name")
         self.nav_goal = state.get("nav_goal")
+
+        # Restore pose
+        pose_data = state.get("pose")
+        self.pose = np.array(pose_data) if pose_data is not None else None
 
         self.observed_num = 0
         self.observations:List[Observation] = []
@@ -166,16 +177,21 @@ class BaseObject:
             os.makedirs(masked_save_dir, exist_ok=True)
             for obs_idx, obs in enumerate(self.observations):
                 # obs_idx = obs.idx
-                cropped_image = obs.cropped_image
-                masked_image = obs.masked_image
-                cropped_image_dir = os.path.join(cropped_save_dir, f"{obs_idx}.png")
-                masked_image_dir = os.path.join(masked_save_dir, f"{obs_idx}.png")
-                # both cropped and masked images are np.ndarray, so save as png
-                import imageio
+                # cropped_image = obs.cropped_image
+                # masked_image = obs.masked_image
+                # cropped_image_dir = os.path.join(cropped_save_dir, f"{obs_idx}.png")
+                # masked_image_dir = os.path.join(masked_save_dir, f"{obs_idx}.png")
+                # # both cropped and masked images are np.ndarray, so save as png
+                # import imageio
 
-                imageio.imwrite(cropped_image_dir, cropped_image)
-                imageio.imwrite(masked_image_dir, masked_image)
-
+                # imageio.imwrite(cropped_image_dir, cropped_image)
+                # imageio.imwrite(masked_image_dir, masked_image)
+                for _i, cropped_image in enumerate(obs.cropped_images):
+                    cropped_image_dir = os.path.join(cropped_save_dir, f"{_i}.png")
+                    imageio.imwrite(cropped_image_dir, cropped_image)
+                for _i, masked_image in enumerate(obs.masked_images):
+                    masked_image_dir = os.path.join(masked_save_dir, f"{_i}.png")
+                    imageio.imwrite(masked_image_dir, masked_image)
     @staticmethod
     def load_from_disk(filename: str):
         """Load the object from disk using pickle."""
@@ -868,9 +884,11 @@ class GlobalObject(BaseObject):
             self.bbox = latest_obs.bbox
             self.pcd_2d = latest_obs.pcd_2d
             self.bbox_2d = latest_obs.bbox_2d
+            self.pose = self.bbox_2d.get_center()
 
             self.clip_ft = latest_obs.clip_ft
             self.class_id = latest_obs.class_id
+            self.class_name = latest_obs.class_name
 
             self.related_objs = latest_obs.related_objs
 

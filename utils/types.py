@@ -67,6 +67,7 @@ class Observation:
     """
 
     class_id: int = 0
+    class_name: str = ""
     pcd: o3d.geometry.PointCloud = field(default_factory=o3d.geometry.PointCloud)
     bbox: o3d.geometry.AxisAlignedBoundingBox = field(
         default_factory=o3d.geometry.AxisAlignedBoundingBox
@@ -122,6 +123,10 @@ class GlobalObservation(Observation):
         related_objs (list): 相关对象的CLIP特征列表
         related_bbox (list): 相关对象的包围盒列表（用于演示）
         related_color (list): 相关对象的颜色列表（用于演示）
+        masked_image (np.ndarray): 单个掩码后的图像（用于调试）
+        cropped_image (np.ndarray): 单个裁剪后的图像（用于调试）
+        masked_images (list): 掩码后的图像列表，每个元素为 np.ndarray (H, W, 3), uint8类型（用于调试）
+        cropped_images (list): 裁剪后的图像列表，每个元素为 np.ndarray (H, W, 3), uint8类型（用于调试）
     """
 
     uid: uuid.UUID = field(default_factory=uuid.uuid4)
@@ -135,6 +140,17 @@ class GlobalObservation(Observation):
     # 仅用于更好的演示
     related_bbox: list = field(default_factory=list)
     related_color: list = field(default_factory=list)
+
+    # 以下属性用于调试
+    masked_image: np.ndarray = field(
+        default_factory=lambda: np.empty((0, 0, 3), dtype=np.uint8)
+    )
+    cropped_image: np.ndarray = field(
+        default_factory=lambda: np.empty((0, 0, 3), dtype=np.uint8)
+    )
+    # 以下属性用于调试
+    masked_images: list = field(default_factory=list)
+    cropped_images: list = field(default_factory=list)
 
 class ObjectClasses:
     """

@@ -542,6 +542,7 @@ class LocalMapManager(BaseMapManager):
         # 设置全局观测信息
         curr_obs.uid = obj.uid
         curr_obs.class_id = obj.class_id
+        curr_obs.class_name = self.visualizer.obj_classes.get_classes_arr()[obj.class_id]
         curr_obs.pcd = obj.pcd
         curr_obs.bbox = obj.pcd.get_axis_aligned_bounding_box()
         curr_obs.clip_ft = obj.clip_ft
@@ -550,6 +551,14 @@ class LocalMapManager(BaseMapManager):
         pcd_2d = obj.voxel_downsample_2d(obj.pcd, self.cfg.downsample_voxel_size)
         curr_obs.pcd_2d = pcd_2d
         curr_obs.bbox_2d = pcd_2d.get_axis_aligned_bounding_box()
+
+        if self.cfg.save_cropped:
+            curr_obs.cropped_image = obj.observations[0].cropped_image
+            curr_obs.masked_image = obj.observations[0].masked_image
+            for observation in obj.observations:
+                curr_obs.cropped_images.append(observation.cropped_image)
+                curr_obs.masked_images.append(observation.masked_image)
+
 
         if related_objs:
             for related_obj in related_objs:

@@ -71,15 +71,28 @@ class GlobalMapManager(BaseMapManager):
             )
 
     def process_observations(self, curr_observations: List[Observation]) -> None:
+        """这是全局地图管理器的核心处理函数, 负责处理从局部地图传递来的观测数据, 并更新全局地图
+
+        Args:
+            curr_observations (List[Observation]): 当前局部地图传递的观测列表(已稳定的对象)
+        """
 
         # for debug, show the preload global map
+        # 如果已经预加载了全局地图，先可视化一次
+            # 用于调试，查看预加载地图的状态
+            # 仅在地图非空且启用 Rerun 时执行
         if len(self.global_map) > 0 and self.cfg.use_rerun:
             self.visualize_global_map()
 
+        # 空观测直接返回
         if len(curr_observations) == 0:
             logger.info("[GlobalMap] No global observation update this time, return")
             return
 
+        # 第一次接收到观测数据时
+            # 将每个观测直接转换为全局对象
+            # 无需匹配，因为地图为空(FIXME: 这里会不会和预加载地图冲突?)
+            # 设置初始化标志
         if self.is_initialized == False:
             # Init the global map
             logger.info("[GlobalMap] Init Global Map by first Local Map input")
@@ -88,6 +101,10 @@ class GlobalMapManager(BaseMapManager):
             return
 
         # The test part, no matching just adding
+        # 无更新模式，测试用
+            # 作用：测试模式，不进行匹配，直接添加所有观测为新对象
+            # 用于测试可视化或数据收集
+            # 绕过匹配逻辑，每个观测都成为独立对象
         if self.cfg.no_update:
             logger.info("[GlobalMap] No update mode, simply adding")
             for obs in curr_observations:
@@ -98,6 +115,8 @@ class GlobalMapManager(BaseMapManager):
 
             return
 
+        # 正常匹配流程(核心逻辑)
+        # 设置跟踪器进行匹配
         # if not the first, then do the global matching
         logger.info("[GlobalMap] Matching")
         self.tracker.set_current_frame(curr_observations)
@@ -203,7 +222,7 @@ class GlobalMapManager(BaseMapManager):
             logger.info(
                 f"[GlobalMap] Preload path not found. Using default map save path: {load_dir}"
             )
-
+        load_dir = os.path.join(load_dir, "global_map")
         # Check if directory exists
         if not os.path.exists(load_dir):
             logger.warning(
@@ -238,12 +257,14 @@ class GlobalMapManager(BaseMapManager):
                 # After modifying, convert it back to open3d Vector3dVector if needed
                 loaded_obj.pcd_2d.points = o3d.utility.Vector3dVector(points)
                 loaded_obj.bbox_2d = loaded_obj.pcd_2d.get_axis_aligned_bounding_box()
+                loaded_obj.pose = loaded_obj.bbox_2d.get_center()
 
             self.global_map.append(loaded_obj)
 
         logger.info(
             f"[GlobalMap] Successfully preloaded {len(self.global_map)} objects"
         )
+        print(f"[GlobalMap] Successfully preloaded {len(self.global_map)} objects")
         self.is_initialized = True
 
     def load_wall(self) -> None:
