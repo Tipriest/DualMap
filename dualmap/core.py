@@ -590,9 +590,9 @@ class Dualmap:
                 self.visualizer.set_time_sequence("frame", self.curr_frame_id)
 
                 # Detection Visualization
-                if self.cfg.use_rerun:
-                    self.detector.visualize_detection()
-                self.detector.update_data()
+                # if self.cfg.use_rerun:
+                    # self.detector.visualize_detection()
+                # self.detector.update_data()
 
                 # Local Mapping
                 with timing_context("Local Mapping", self):
