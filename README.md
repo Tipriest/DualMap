@@ -1,35 +1,10 @@
 # README.md
 
 ## 一. 项目作用
-作为`语义地图`/`层次关系图`加载和构建的验证平台
-- 输入
-  - ROS实时数据流
-    - RGB-D消息
-    - 机器人位置Pose
-    - 相机内参
-  - 数据集
-    - 数据集
-- 输出
-  - 地图数据流
-    - 语义地图对象列表
-    - 语义地图层次关系
-- 生成文件
-  - layout点云布局
-  -
-  - 语义地图对象列表
-  - 所有类别物体的数量(class_num.json)
-- 验证
-  - 生成地图之后使用脚本，判断检测率和位置平均检测偏差，最好能够在一张图上打印出来，或者在多张图上打印出来
-  -
-  - 生成之后查看生成的树状关系图，最好能够用某种方式展示出来，可以用节点拉伸打开这样子
-  - 生成之后查看
-- 需要负责的任务
-  - YOLO扩展与增训
-  - 检测准确度排查
-  - 分层的层次地图
+这个是search_only分支，这个分支主要是用来做搜索的，所以可以加载之前保存好的建图部分的构建结果，
+并且运行一个rerun的窗口，rerun窗口中包含了之前保存的所有物体和layout还有
 
-## 二. 存在的问题
-1. 看一个杂乱一点的地方时间很长很长之后(1000多个keyframe), 内存消耗会爆炸
+
 
 
 
@@ -124,26 +99,3 @@ DualMap 支持从 iPhone 上的 **Record3D** 应用进行**实时数据流传输
 
 系统同时支持 [Rerun](https://rerun.io) 和 [Rviz](http://wiki.ros.org/rviz) 可视化。使用 ROS 运行时，您可以通过 `config/runner_ros.yaml` 中的 `use_rerun` 和 `use_rviz` 选项切换可视化方式。
 
-## 引用
-
-如果您觉得我们的工作有帮助，请考虑为本仓库点星 🌟 并引用：
-
-```bibtex
-@article{jiang2025dualmap,
-  title={DualMap: Online Open-Vocabulary Semantic Mapping for Natural Language Navigation in Dynamic Changing Scenes},
-  author={Jiang, Jiajun and Zhu, Yiming and Wu, Zirui and Song, Jie},
-  journal={arXiv preprint arXiv:2506.01950},
-  year={2025}
-}
-```
-
-## 联系方式
-技术问题请创建 issue。其他问题请联系第一作者：jjiang127 [at] connect.hkust-gz.edu.cn
-
-## 致谢
-
-我们感谢 [HOVSG](https://github.com/hovsg/HOV-SG) 和 [ConceptGraphs](https://github.com/concept-graphs/concept-graphs) 作者的贡献和启发。
-
-特别感谢 @[TOM-Huang](https://github.com/Tom-Huang) 在整个项目开发过程中提供的宝贵建议和支持。
-
-我们也感谢 [MobileCLIP](https://github.com/apple/ml-mobileclip)、[CLIP](https://github.com/openai/CLIP)、[Segment Anything (SAM)](https://github.com/facebookresearch/segment-anything)、[MobileSAM](https://github.com/ChaoningZhang/MobileSAM)、[FastSAM](https://github.com/CASIA-IVA-Lab/FastSAM) 和 [YOLO-World](https://github.com/AILab-CVC/YOLO-World) 的开发者们提供的优秀开源工作，为本项目提供了强大的技术基础。

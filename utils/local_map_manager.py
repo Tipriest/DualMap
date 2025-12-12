@@ -152,7 +152,7 @@ class LocalMapManager(BaseMapManager):
             logger.info("[LocalMap] Init Local Map by first observation")
 
             if len(curr_observations) == 0:
-                logger.warning("[LocalMap] No observation in this frame")
+                # logger.warning("[LocalMap] No observation in this frame")
                 return
 
             self.init_from_observation(curr_observations)
@@ -160,7 +160,7 @@ class LocalMapManager(BaseMapManager):
             return
 
         if len(curr_observations) == 0:
-            logger.warning("[LocalMap] No observation in this frame")
+            # logger.warning("[LocalMap] No observation in this frame")
             self.update_local_map(curr_observations)
             return
 

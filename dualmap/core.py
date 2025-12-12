@@ -124,8 +124,13 @@ class Dualmap:
         # debug param: path counter
         self.path_counter = 0
 
+        if self.cfg.only_for_seacrch:
+            self.mapping_thread = threading.Thread(
+                target=self.run_ony_search_mapping_thread, daemon=True
+            )
+            self.mapping_thread.start()
         # Parallel for mapping thread
-        if self.cfg.use_parallel:
+        elif self.cfg.use_parallel:
             self.detection_results_queue = queue.Queue(
                 maxsize=10
             )  # Limit queue size to avoid memory leaks
@@ -529,6 +534,55 @@ class Dualmap:
                 )  # Timeout exception
                 logger.info(
                     f"[Core][MappingThread] Received data for frame {curr_frame_id},"
+                    " Queue size {self.detection_results_queue.qsize()}"
+                )
+
+                # Set time stamp
+                self.visualizer.set_time_sequence("frame", self.curr_frame_id)
+
+                # Detection Visualization
+                if self.cfg.use_rerun:
+                    self.detector.visualize_detection()
+                self.detector.update_data()
+
+                # Local Mapping
+                with timing_context("Local Mapping", self):
+                    self.local_map_manager.set_curr_idx(curr_frame_id)
+                    self.local_map_manager.process_observations(curr_obs_list)
+
+                # Get global observations
+                with timing_context("Global Mapping", self):
+                    global_obs_list = self.local_map_manager.get_global_observations()
+                    self.local_map_manager.clear_global_observations()
+
+                    # Global Mapping
+                    self.global_map_manager.process_observations(global_obs_list)
+
+                # Get memory usage statistics of local and global maps
+                # mem_stats = get_map_memory_usage(self.local_map_manager.local_map,
+                #                                 self.global_map_manager.global_map)
+
+                # logger.info(
+                #     f"[Core][MappingThread] Memory Usage - Local Map: {mem_stats['local_map_mb']} MB, "
+                #     f"Global Map: {mem_stats['global_map_mb']} MB"
+                # )
+
+            except queue.Empty:
+                continue
+
+    def run_ony_search_mapping_thread(self):
+        """
+        其实这里就是拿一下parallel_process处理结果的observations,
+        然后运行local_mapping和global_mapping把observations变换为local_object和global_object, 在local_object中进行匹配, 取出低移动性的物体的observation传入到global_mapping中
+        """
+        while not self.stop_thread:
+            try:
+                # Get detection results from queue
+                # logger.info(f"Queue length: {len(self.detection_results_queue)}")
+                curr_obs_list = []
+                curr_frame_id =0
+                logger.info(
+                    f"[Core][ony_search_mapping_thread] Received data for frame {curr_frame_id},"
                     " Queue size {self.detection_results_queue.qsize()}"
                 )
 

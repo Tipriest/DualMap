@@ -153,11 +153,13 @@ class RunnerROSBase:
 
         # 得到对于dualmap, 这是第几个关键帧
         data_input.idx = self.dualmap.get_keyframe_idx()
-        
+
 
         self.logger.info(
             "[Main] ============================================================"
         )
+        if self.cfg.only_for_seacrch:
+            return
         with timing_context("Time Per Frame", self.dualmap):
             if self.cfg.use_parallel:
                 self.dualmap.parallel_process(data_input)

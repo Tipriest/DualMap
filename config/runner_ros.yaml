@@ -22,6 +22,10 @@ use_compressed_topic: False
 sync_threshold: 0.1
 
 
+
+# 只用于搜索的控制位，开启则只会加载保存的路径下的内容
+only_for_seacrch: True
+use_end_process: False
 # ============================================================
 # DUALMAP CONFIG
 # ============================================================
@@ -86,7 +90,7 @@ preload_layout: True
 # If empty, the system will use the default preload path
 # preload_path: ""
 # preload_path: "dataset/HM3D_collect/00829-QaLdnwvtxbs/global_map/hm3d"
-preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20251212_195007"
+preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20251212_200221"
 
 # Preload action paths for visualization
 use_given_path: False
