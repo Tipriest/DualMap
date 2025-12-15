@@ -8,17 +8,17 @@
 
 
 
-## 加载结果
-#### 1. 理论上的加载结果
+## 二. 加载结果
+#### 2.1 理论上的加载结果
 ![alt text](assets/intro.png)
 
 
 
-## 安装
+## 三. 安装
 
 > 已在 **Ubuntu 22.04** + **ROS 2 Humble** + **Python 3.10** 上测试通过
 
-#### 1. 克隆仓库（包含子模块）
+#### 3.1 克隆仓库（包含子模块）
 
 ```bash
 git clone --branch feat/search_only --single-branch --recurse-submodules git@github.com:Tipriest/DualMap.git
@@ -26,7 +26,7 @@ cd DualMap
 ```
 
 
-#### 2. 创建 Conda 环境
+#### 3.2 创建 Conda 环境
 ```bash
 conda env create -f environment.yml
 conda activate dualmap
@@ -36,7 +36,7 @@ conda install openssl=3.0.13  # Ubuntu 22.04 常用版本
 conda install libcurl
 ```
 
-#### 3. 安装 MobileCLIP(以后可以安装clip v2)
+#### 3.3 安装 MobileCLIP(以后可以安装clip v2)
 ```bash
 cd 3rdparty/mobileclip
 pip install -e . --no-deps
@@ -45,10 +45,12 @@ cd ../..
 
 
 
-## 📦 数据集设置
+## 四. 数据集设置
 
 在运行工具之前，请按照 [数据集设置指南](docs/dataset_netdisk.md) 准备所需的数据集。
 
+## 五. 其他事项
+1. [与vln_gazebo_simulator的坐标转换问题说明](./docs/坐标转换.md)
 ## 运行
 ```bash
 conda activate dualmap
