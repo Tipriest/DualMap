@@ -4,6 +4,7 @@ import pdb
 import shutil
 from collections import Counter
 from typing import List
+import random
 
 import networkx as nx
 import numpy as np
@@ -556,8 +557,12 @@ class LocalMapManager(BaseMapManager):
             curr_obs.cropped_image = obj.observations[0].cropped_image
             curr_obs.masked_image = obj.observations[0].masked_image
             for observation in obj.observations:
-                curr_obs.cropped_images.append(observation.cropped_image)
-                curr_obs.masked_images.append(observation.masked_image)
+                if len(curr_obs.cropped_images)<5:
+                    curr_obs.cropped_images.append(observation.cropped_image)
+                    curr_obs.masked_images.append(observation.masked_image)
+                else:
+                    curr_obs.cropped_images[random.randint(0,4)] = observation.cropped_image
+                    curr_obs.masked_images[random.randint(0,4)] = observation.masked_image
 
 
         if related_objs:
