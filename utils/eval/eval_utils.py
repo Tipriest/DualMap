@@ -212,7 +212,9 @@ def calculate_avg_prec(iou_matrix: np.array, obj_idx, gt_idx):
         FN = iou_matrix.shape[1] - TP
         precision = TP / (TP + FP) if (TP + FP) > 0 else 0
         recall = TP / (TP + FN) if (TP + FN) > 0 else 0
-        accuracy = (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) > 0 else 0
+        accuracy = (
+            (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) > 0 else 0
+        )
         acc_values.append(accuracy)
         prec_values.append(precision)
         rec_values.append(recall)
@@ -277,7 +279,7 @@ def knn_interpolation(cumulated_pc: np.ndarray, full_sized_data: np.ndarray, k):
     :param full_sized_data: full sized point cloud
     :param k: k for k nearest neighbor interpolation
     :return: pointcloud with predicted labels in last column and ground truth labels in last but one column
-    
+
     使用k-nn插值为全尺寸点云的点找到标签
     :param cumulated_pc: 运行网络后累积的点云结果
     :param full_sized_data: 全尺寸点云
@@ -324,7 +326,9 @@ def draw_bar_chart(data_dict, save_path):
     """
     # Sort the dictionary by values in descending order
     # 按值降序对字典进行排序
-    sorted_items = sorted(data_dict.items(), key=lambda item: item[1], reverse=True)
+    sorted_items = sorted(
+        data_dict.items(), key=lambda item: item[1], reverse=True
+    )
 
     # Unpack keys and values
     # 解包键和值
@@ -368,7 +372,11 @@ def draw_bar_chart(data_dict, save_path):
 
 
 def draw_detailed_bar_chart(
-    data_dict, class_id_names, unique_to_class_gt, unique_to_class_pred, save_path
+    data_dict,
+    class_id_names,
+    unique_to_class_gt,
+    unique_to_class_pred,
+    save_path,
 ):
     """
     Generate and save a detailed bar chart with color-coded bars based on class membership.
@@ -386,14 +394,18 @@ def draw_detailed_bar_chart(
         unique_to_class_pred: 预测中唯一的类别ID列表。
         save_path: 保存条形图的路径。
     """
-    unique_to_class_gt = [class_id_names[class_id] for class_id in unique_to_class_gt]
+    unique_to_class_gt = [
+        class_id_names[class_id] for class_id in unique_to_class_gt
+    ]
     unique_to_class_pred = [
         class_id_names[class_id] for class_id in unique_to_class_pred
     ]
 
     # Sort the dictionary by values in descending order
     # 按值降序对字典进行排序
-    sorted_items = sorted(data_dict.items(), key=lambda item: item[1], reverse=True)
+    sorted_items = sorted(
+        data_dict.items(), key=lambda item: item[1], reverse=True
+    )
 
     # Unpack keys and values
     labels, values = zip(*sorted_items)
@@ -462,7 +474,11 @@ def draw_detailed_bar_chart(
 
 
 def get_text_features(
-    clip_length: int, class_names: list, clip_model, clip_tokenizer, batch_size=64
+    clip_length: int,
+    class_names: list,
+    clip_model,
+    clip_tokenizer,
+    batch_size=64,
 ) -> np.ndarray:
     """获取文本特征。"""
 
@@ -480,7 +496,9 @@ def get_text_features(
     # Get tokens
     text_tokens = clip_tokenizer(class_name_prompts).to("cuda")
     # Get Output features
-    text_feats = np.zeros((len(class_name_prompts), clip_length), dtype=np.float32)
+    text_feats = np.zeros(
+        (len(class_name_prompts), clip_length), dtype=np.float32
+    )
     # Get the text feature batch by batch
     # 逐批获取文本特征
     text_id = 0
@@ -501,9 +519,11 @@ def get_text_features(
 
     # shrink the output text features into classes names size
     # 将输出文本特征缩减为类别名称大小
-    text_feats = text_feats.reshape((-1, len(multiple_templates), text_feats.shape[-1]))
+    text_feats = text_feats.reshape(
+        (-1, len(multiple_templates), text_feats.shape[-1])
+    )
     text_feats = np.mean(text_feats, axis=1)
-    
+
     # 归一化文本特征
     # 归一化文本特征
     norms = np.linalg.norm(text_feats, axis=1, keepdims=True)

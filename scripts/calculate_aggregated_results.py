@@ -16,7 +16,9 @@ def calculate_averages_and_save(output_path, scene_ids):
     scene_results = {}
 
     for scene_id in scene_ids:
-        results_file = os.path.join(output_path, f"replica_{scene_id}", "results.json")
+        results_file = os.path.join(
+            output_path, f"replica_{scene_id}", "results.json"
+        )
 
         if os.path.exists(results_file):
             with open(results_file, "r") as f:
@@ -107,7 +109,9 @@ def main():
         description="Calculate and aggregate performance metrics, then export to Excel."
     )
     parser.add_argument(
-        "output_path", type=str, help="Path to the directory containing the results."
+        "output_path",
+        type=str,
+        help="Path to the directory containing the results.",
     )
     args = parser.parse_args()
 

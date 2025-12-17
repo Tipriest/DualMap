@@ -9,7 +9,10 @@ import imageio
 import numpy as np
 import torch
 import yaml
-from kornia.geometry.linalg import compose_transformations, inverse_transformation
+from kornia.geometry.linalg import (
+    compose_transformations,
+    inverse_transformation,
+)
 from natsort import natsorted
 from omegaconf import DictConfig, OmegaConf
 from scipy.spatial.transform import Rotation as R
@@ -50,7 +53,7 @@ class BaseDataset(torch.utils.data.Dataset):
         device="cuda:0",
         dtype=torch.float,
         relative_pose: bool = True,  # If True, the pose is relative to the first frame
-                                     # 如果为True，位姿是相对于第一帧的
+        # 如果为True，位姿是相对于第一帧的
         **kwargs,
     ):
         super().__init__()
@@ -72,8 +75,12 @@ class BaseDataset(torch.utils.data.Dataset):
         self.desired_width = desired_width
         self.dtype = dtype
 
-        self.h_downsample_ratio = float(self.desired_height) / float(self.orig_height)
-        self.w_downsample_ratio = float(self.desired_width) / float(self.orig_width)
+        self.h_downsample_ratio = float(self.desired_height) / float(
+            self.orig_height
+        )
+        self.w_downsample_ratio = float(self.desired_width) / float(
+            self.orig_width
+        )
         self.channels_first = channels_first
         self.normalize_color = normalize_color
 
@@ -112,8 +119,12 @@ class BaseDataset(torch.utils.data.Dataset):
 
         if use_stride:
             logger.info("[Dataset] Use stride")
-            self.color_paths = self.color_paths[self.start : self.end : self.stride]
-            self.depth_paths = self.depth_paths[self.start : self.end : self.stride]
+            self.color_paths = self.color_paths[
+                self.start : self.end : self.stride
+            ]
+            self.depth_paths = self.depth_paths[
+                self.start : self.end : self.stride
+            ]
             self.poses = self.poses[self.start : self.end : self.stride]
 
         # update number of images(更新图像数量)
@@ -301,7 +312,10 @@ class BaseDataset(torch.utils.data.Dataset):
         return K
 
     def relative_trans(
-        self, trans_ab: torch.Tensor, trans_cb: torch.Tensor, orthogonal: bool = False
+        self,
+        trans_ab: torch.Tensor,
+        trans_cb: torch.Tensor,
+        orthogonal: bool = False,
     ) -> torch.Tensor:
         """计算相对变换。"""
         # 判断输入
@@ -310,11 +324,15 @@ class BaseDataset(torch.utils.data.Dataset):
         if not torch.is_tensor(trans_cb):
             raise TypeError("trans_cb must be a torch.Tensor")
         if not trans_ab.dim() == trans_cb.dim():
-            raise ValueError("trans_ab and trans_cb must have the same dimension")
+            raise ValueError(
+                "trans_ab and trans_cb must have the same dimension"
+            )
 
         # calculate trans_ba
         trans_ba = (
-            inverse_transformation(trans_ab) if orthogonal else torch.inverse(trans_ab)
+            inverse_transformation(trans_ab)
+            if orthogonal
+            else torch.inverse(trans_ab)
         )
 
         # calculate trans_ca
@@ -361,8 +379,12 @@ class ReplicaDataset(BaseDataset):
 
     def get_filepaths(self):
         """获取文件路径。"""
-        color_paths = natsorted(glob.glob(f"{self.input_path}/results/frame*.jpg"))
-        depth_paths = natsorted(glob.glob(f"{self.input_path}/results/depth*.png"))
+        color_paths = natsorted(
+            glob.glob(f"{self.input_path}/results/frame*.jpg")
+        )
+        depth_paths = natsorted(
+            glob.glob(f"{self.input_path}/results/depth*.png")
+        )
 
         logger.info(f"[Dataset] Number of color images: {len(color_paths)}")
         logger.info(f"[Dataset] Number of depth images: {len(depth_paths)}")
@@ -651,11 +673,17 @@ class TUMRGBDDataset(BaseDataset):
             final_color_paths = matched_target_paths
             final_depth_paths = matched_base_paths
 
-        logger.info(f"[Dataset] First aligned color image: {final_color_paths[0]}")
-        logger.info(f"[Dataset] First aligned depth image: {final_depth_paths[0]}")
+        logger.info(
+            f"[Dataset] First aligned color image: {final_color_paths[0]}"
+        )
+        logger.info(
+            f"[Dataset] First aligned depth image: {final_depth_paths[0]}"
+        )
         logger.info(f"[Dataset] Final aligned length: {len(final_color_paths)}")
 
-        self.target_timestamps = [self.extract_timestamp(p) for p in final_depth_paths]
+        self.target_timestamps = [
+            self.extract_timestamp(p) for p in final_depth_paths
+        ]
 
         return final_color_paths, final_depth_paths
 
@@ -687,7 +715,9 @@ class TUMRGBDDataset(BaseDataset):
 
         # -------- ----------
         target_ts = self.target_timestamps
-        time_stamps_sorted = sorted((ts, i) for i, ts in enumerate(time_stamps_all))
+        time_stamps_sorted = sorted(
+            (ts, i) for i, ts in enumerate(time_stamps_all)
+        )
         sorted_ts = [ts for ts, _ in time_stamps_sorted]
         sorted_idx = [i for _, i in time_stamps_sorted]
 
@@ -731,7 +761,9 @@ class TUMRGBDDataset(BaseDataset):
             )
 
             bad_indices = [
-                i for i, t in enumerate(self.target_timestamps) if t in not_found_ts
+                i
+                for i, t in enumerate(self.target_timestamps)
+                if t in not_found_ts
             ]
 
             def remove_indices_from_list(lst, indices):
@@ -740,8 +772,12 @@ class TUMRGBDDataset(BaseDataset):
             self.target_timestamps = remove_indices_from_list(
                 self.target_timestamps, bad_indices
             )
-            self.color_paths = remove_indices_from_list(self.color_paths, bad_indices)
-            self.depth_paths = remove_indices_from_list(self.depth_paths, bad_indices)
+            self.color_paths = remove_indices_from_list(
+                self.color_paths, bad_indices
+            )
+            self.depth_paths = remove_indices_from_list(
+                self.depth_paths, bad_indices
+            )
 
         logger.info(f"[Dataset] Aligned poses: {len(aligned_poses)}")
         self.time_stamps = self.target_timestamps

@@ -79,7 +79,9 @@ class Evaluator:
             self.top_k_list = cfg.scannet.top_k_list
             self.use_scannet200 = cfg.scannet.use_scannet200
         else:
-            raise ValueError(f"Error: Unknown dataset name: {self.dataset_name}")
+            raise ValueError(
+                f"Error: Unknown dataset name: {self.dataset_name}"
+            )
 
         # Ignore Classes Configuration
         self.filter_gt_with_ignore = cfg.filter_gt_with_ignore
@@ -114,7 +116,9 @@ class Evaluator:
 
         # Load CLIP Model if in CLIP Mode
         if self.mode == "clip":
-            self.load_clip_model(cfg.clip.model_name, cfg.clip.pretrained, cfg.device)
+            self.load_clip_model(
+                cfg.clip.model_name, cfg.clip.pretrained, cfg.device
+            )
 
     def set_ignore(self):
         # Get ignore classes of GT during evaluation
@@ -132,26 +136,38 @@ class Evaluator:
     def replica_set_id_name_color_mapping(self):
         # Create class_id to name mapping
         class_id_names_path = os.path.join(
-            self.config_path, f"{self.dataset_name}_{self.scene_id}_id_names.json"
+            self.config_path,
+            f"{self.dataset_name}_{self.scene_id}_id_names.json",
         )
-        logging.info("Loading class ids -> names from: {}".format(class_id_names_path))
+        logging.info(
+            "Loading class ids -> names from: {}".format(class_id_names_path)
+        )
         if not os.path.exists(class_id_names_path):
-            raise FileNotFoundError(f"Error: File not found: {class_id_names_path}")
+            raise FileNotFoundError(
+                f"Error: File not found: {class_id_names_path}"
+            )
 
         self.class_id_names = {}
         with open(class_id_names_path, "r") as file:
             class_id_names = json.load(file)
-        self.class_id_names = {int(key): value for key, value in class_id_names.items()}
+        self.class_id_names = {
+            int(key): value for key, value in class_id_names.items()
+        }
 
         # Create class id to color mapping
         class_id_colors_path = os.path.join(
-            self.config_path, f"{self.dataset_name}_{self.scene_id}_id_colors.json"
+            self.config_path,
+            f"{self.dataset_name}_{self.scene_id}_id_colors.json",
         )
         logging.info(
-            "Loading classes id --> colors from: {}".format(class_id_colors_path)
+            "Loading classes id --> colors from: {}".format(
+                class_id_colors_path
+            )
         )
         if not os.path.exists(class_id_colors_path):
-            raise FileNotFoundError(f"Error: File not found: {class_id_colors_path}")
+            raise FileNotFoundError(
+                f"Error: File not found: {class_id_colors_path}"
+            )
 
         self.class_id_colors = {}
         with open(class_id_colors_path, "r") as file:
@@ -161,7 +177,9 @@ class Evaluator:
         }
 
     def scannet_set_id_name_color_mapping(self):
-        logging.info("Loading class ids -> names from: utils.eval.scannet200_constants")
+        logging.info(
+            "Loading class ids -> names from: utils.eval.scannet200_constants"
+        )
         if self.use_scannet200:
             class_ids, class_names, class_id_colors = (
                 VALID_CLASS_IDS_200,
@@ -204,7 +222,9 @@ class Evaluator:
         )
 
         # Check if the files exist
-        if not os.path.exists(ply_path) or not os.path.exists(semantic_info_path):
+        if not os.path.exists(ply_path) or not os.path.exists(
+            semantic_info_path
+        ):
             missing_files = []
             if not os.path.exists(ply_path):
                 missing_files.append(ply_path)
@@ -221,7 +241,9 @@ class Evaluator:
             )
         else:
             # Load only point-level GT
-            gt_pcd, gt_class_ids, _, _ = load_replica_ply(ply_path, semantic_info_path)
+            gt_pcd, gt_class_ids, _, _ = load_replica_ply(
+                ply_path, semantic_info_path
+            )
 
         if self.is_debug:
             # Save the sem full pcd
@@ -258,7 +280,8 @@ class Evaluator:
 
         if self.is_debug:
             o3d.io.write_point_cloud(
-                os.path.join(self.output_dir, "gt_sem_pcd_filtered.pcd"), self.gt_pcd
+                os.path.join(self.output_dir, "gt_sem_pcd_filtered.pcd"),
+                self.gt_pcd,
             )
 
     def load_gt_scannet(self):
@@ -268,7 +291,9 @@ class Evaluator:
             f"{self.scene_id}_vh_clean_2.labels.ply",
         )
         if self.use_scannet200:
-            ply_path = os.path.join(self.dataset_gt_path, f"{self.scene_id}.ply")
+            ply_path = os.path.join(
+                self.dataset_gt_path, f"{self.scene_id}.ply"
+            )
         missing_files = []
         if not os.path.exists(ply_path):
             missing_files.append(ply_path)
@@ -284,7 +309,9 @@ class Evaluator:
             )
         else:
             # Load only point-level GT
-            gt_pcd, gt_class_ids, _, _ = load_scannet_ply(ply_path, self.use_scannet200)
+            gt_pcd, gt_class_ids, _, _ = load_scannet_ply(
+                ply_path, self.use_scannet200
+            )
 
         if gt_objs is None or gt_obj_ids is None:
             raise ValueError(
@@ -327,7 +354,8 @@ class Evaluator:
 
         if self.is_debug:
             o3d.io.write_point_cloud(
-                os.path.join(self.output_dir, "gt_sem_pcd_filtered.pcd"), self.gt_pcd
+                os.path.join(self.output_dir, "gt_sem_pcd_filtered.pcd"),
+                self.gt_pcd,
             )
 
     def load_map(self):
@@ -372,10 +400,12 @@ class Evaluator:
                 seg_full_pcd += obj.pcd.paint_uniform_color(color)
 
             o3d.io.write_point_cloud(
-                os.path.join(self.output_dir, "pred_rgb_pcd_full.pcd"), rgb_full_pcd
+                os.path.join(self.output_dir, "pred_rgb_pcd_full.pcd"),
+                rgb_full_pcd,
             )
             o3d.io.write_point_cloud(
-                os.path.join(self.output_dir, "pred_seg_pcd_full.pcd"), seg_full_pcd
+                os.path.join(self.output_dir, "pred_seg_pcd_full.pcd"),
+                seg_full_pcd,
             )
 
     def calc_clip_labels(self):
@@ -393,7 +423,9 @@ class Evaluator:
 
         # Get Top-N matched laebls for each object in obj map
         # Calculate cosine similarity mat, N(obj num) x M(GT num)
-        sim_mat = np.zeros((len(self.obj_map), len(class_names)), dtype=np.float32)
+        sim_mat = np.zeros(
+            (len(self.obj_map), len(class_names)), dtype=np.float32
+        )
         # stack all the clip feats from obj map into a np array
         obj_feats = np.vstack([obj.clip_ft for obj in self.obj_map])
 
@@ -437,7 +469,9 @@ class Evaluator:
     def calc_auc(self, iou_th=None):
         print("Calculating semantic Top-k AUC...")
         if iou_th is None:
-            raise ValueError("Error: iou_th should be provided for AUC calculation")
+            raise ValueError(
+                "Error: iou_th should be provided for AUC calculation"
+            )
 
         # ODJECT-LEVEL IoU and GT matching
         gt_bbox = []
@@ -451,7 +485,9 @@ class Evaluator:
         iou_matrix = np.zeros((len(obj_bbox), len(gt_bbox)))
         for i in range(len(obj_bbox)):
             for j in range(len(gt_bbox)):
-                iou_matrix[i, j] = pairwise_iou_calculate(obj_bbox[i], gt_bbox[j])
+                iou_matrix[i, j] = pairwise_iou_calculate(
+                    obj_bbox[i], gt_bbox[j]
+                )
 
         # Assign the GT label to each object
         obj_idx, gt_idx = linear_sum_assignment(iou_matrix, maximize=True)
@@ -472,7 +508,9 @@ class Evaluator:
 
         # Calculate cosine similarity matrix
         # obj_feats and class_names_feats are normalized before
-        sim_mat_assigned = cosine_similarity(obj_feats_assigned, self.class_names_feats)
+        sim_mat_assigned = cosine_similarity(
+            obj_feats_assigned, self.class_names_feats
+        )
 
         # Top-k results evaluation
         # Calculate accuracy with different top-k
@@ -545,11 +583,15 @@ class Evaluator:
             # get colors based on the class_ids_pred
             gt_pred_pcd.colors = o3d.utility.Vector3dVector(
                 np.array(
-                    [self.class_id_colors[idx] for idx in class_ids_pred.reshape(-1)]
+                    [
+                        self.class_id_colors[idx]
+                        for idx in class_ids_pred.reshape(-1)
+                    ]
                 )
             )
             o3d.io.write_point_cloud(
-                os.path.join(self.output_dir, "gt_mapped_pcd_full.pcd"), gt_pred_pcd
+                os.path.join(self.output_dir, "gt_mapped_pcd_full.pcd"),
+                gt_pred_pcd,
             )
 
         # Calculation
@@ -567,7 +609,9 @@ class Evaluator:
         mean_iou = np.mean(iou_per_class)
 
         # Frequency Weighted Intersection over Union
-        fmiou = compute_FmIoU(class_ids_pred, class_ids_gt, ignore=self.ignore_ids)
+        fmiou = compute_FmIoU(
+            class_ids_pred, class_ids_gt, ignore=self.ignore_ids
+        )
 
         # Acc per class
         acc_per_class, acc_classes = compute_per_class_accuracy(
@@ -575,7 +619,9 @@ class Evaluator:
         )
 
         # Mean Acc
-        macc = compute_mAcc(class_ids_pred, class_ids_gt, ignore=self.ignore_ids)
+        macc = compute_mAcc(
+            class_ids_pred, class_ids_gt, ignore=self.ignore_ids
+        )
 
         self.iou_acc_dict = {
             "miou": mean_iou,
@@ -659,7 +705,9 @@ class Evaluator:
 
 
 @measure_time_block("Evaluation Time")
-@hydra.main(version_base=None, config_path="../config/", config_name="seg_evaluation")
+@hydra.main(
+    version_base=None, config_path="../config/", config_name="seg_evaluation"
+)
 def main(cfg: DictConfig):
     evaluator = Evaluator(cfg)
     dataset_name = evaluator.get_dataset_name()

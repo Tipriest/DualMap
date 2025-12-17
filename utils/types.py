@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 
+
 @dataclass
 class DataInput:
     """
@@ -51,6 +52,7 @@ class DataInput:
         """返回对象的深拷贝。"""
         return copy.deepcopy(self)
 
+
 @dataclass
 class Observation:
     """
@@ -68,16 +70,21 @@ class Observation:
 
     class_id: int = 0
     class_name: str = ""
-    pcd: o3d.geometry.PointCloud = field(default_factory=o3d.geometry.PointCloud)
+    pcd: o3d.geometry.PointCloud = field(
+        default_factory=o3d.geometry.PointCloud
+    )
     bbox: o3d.geometry.AxisAlignedBoundingBox = field(
         default_factory=o3d.geometry.AxisAlignedBoundingBox
     )
-    clip_ft: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
+    clip_ft: np.ndarray = field(
+        default_factory=lambda: np.empty(0, dtype=np.float32)
+    )
 
     # 匹配信息
     matched_obj_uid: None = None
     matched_obj_score: float = 0.0
     matched_obj_idx: int = -1
+
 
 @dataclass
 class LocalObservation(Observation):
@@ -96,8 +103,12 @@ class LocalObservation(Observation):
     """
 
     idx: int = 0
-    mask: np.ndarray = field(default_factory=lambda: np.empty((0, 0), dtype=np.uint8))
-    xyxy: np.ndarray = field(default_factory=lambda: np.empty((0, 4), dtype=np.float32))
+    mask: np.ndarray = field(
+        default_factory=lambda: np.empty((0, 0), dtype=np.uint8)
+    )
+    xyxy: np.ndarray = field(
+        default_factory=lambda: np.empty((0, 4), dtype=np.float32)
+    )
     conf: float = 0.0
     distance: float = 0.0
 
@@ -110,6 +121,7 @@ class LocalObservation(Observation):
     cropped_image: np.ndarray = field(
         default_factory=lambda: np.empty((0, 0, 3), dtype=np.uint8)
     )
+
 
 @dataclass
 class GlobalObservation(Observation):
@@ -130,7 +142,9 @@ class GlobalObservation(Observation):
     """
 
     uid: uuid.UUID = field(default_factory=uuid.uuid4)
-    pcd_2d: o3d.geometry.PointCloud = field(default_factory=o3d.geometry.PointCloud)
+    pcd_2d: o3d.geometry.PointCloud = field(
+        default_factory=o3d.geometry.PointCloud
+    )
     bbox_2d: o3d.geometry.AxisAlignedBoundingBox = field(
         default_factory=o3d.geometry.AxisAlignedBoundingBox
     )
@@ -151,6 +165,7 @@ class GlobalObservation(Observation):
     # 以下属性用于调试
     masked_images: list = field(default_factory=list)
     cropped_images: list = field(default_factory=list)
+
 
 class ObjectClasses:
     """
@@ -192,7 +207,8 @@ class ObjectClasses:
         # 为每个类别添加颜色
         # 加载颜色路径
         color_file_path = (
-            self.classes_file_path.parent / f"{self.classes_file_path.stem}_colors.json"
+            self.classes_file_path.parent
+            / f"{self.classes_file_path.stem}_colors.json"
         )
 
         id_color_file_path = (
@@ -205,14 +221,19 @@ class ObjectClasses:
                 class_to_color = json.load(f)
             # 构建一个字典映射 {class, color}
             class_to_color = {
-                cls: class_to_color[cls] for cls in classes if cls in class_to_color
+                cls: class_to_color[cls]
+                for cls in classes
+                if cls in class_to_color
             }
         else:
             class_to_color = {
-                class_name: list(np.random.rand(3).tolist()) for class_name in classes
+                class_name: list(np.random.rand(3).tolist())
+                for class_name in classes
             }
             # 生成相应的 id_to_color 映射
-            id_to_color = {str(i): class_to_color[cls] for i, cls in enumerate(classes)}
+            id_to_color = {
+                str(i): class_to_color[cls] for i, cls in enumerate(classes)
+            }
             # 将新字典转储到json
             with open(color_file_path, "w") as f:
                 json.dump(class_to_color, f)
@@ -230,7 +251,9 @@ class ObjectClasses:
             1, int(len(classes) * selection_ratio)
         )  # 至少选择一个
         selected_classes = random.sample(classes, num_selected)
-        selected_class_to_color = {cls: class_to_color[cls] for cls in selected_classes}
+        selected_class_to_color = {
+            cls: class_to_color[cls] for cls in selected_classes
+        }
 
         return selected_classes, selected_class_to_color
 
@@ -275,6 +298,7 @@ class ObjectClasses:
             str(i): self.class_to_color[self.classes[i]]
             for i in range(len(self.classes))
         }
+
 
 class GoalMode(Enum):
     RANDOM = "random"

@@ -40,8 +40,8 @@ class LocalMapManager(BaseMapManager):
         self.global_observations = []
 
         # objects list(对象列表)
-        self.local_map:List[LocalObject] = []
-        self.global_map:List[GlobalObject] = []
+        self.local_map: List[LocalObject] = []
+        self.global_map: List[GlobalObject] = []
 
         self.graph = (
             nx.Graph()
@@ -130,7 +130,9 @@ class LocalMapManager(BaseMapManager):
             related_uids = list(self.graph.neighbors(obj_uid))
             # Convert these UIDs to LocalObject objects and return(将这些UID转换为LocalObject对象并返回)
             related_objects = [
-                self.get_object(uid) for uid in related_uids if self.get_object(uid)
+                self.get_object(uid)
+                for uid in related_uids
+                if self.get_object(uid)
             ]
             return related_objects
         else:
@@ -299,7 +301,9 @@ class LocalMapManager(BaseMapManager):
         if self.to_be_eliminated:
             # local map deletion(局部地图删除)
             self.local_map = [
-                obj for obj in self.local_map if obj.uid not in self.to_be_eliminated
+                obj
+                for obj in self.local_map
+                if obj.uid not in self.to_be_eliminated
             ]
 
             # graph deletion(图删除)
@@ -332,12 +336,17 @@ class LocalMapManager(BaseMapManager):
                 # If the other obj meets the on relation with the current object
                 # and not the obj itself
                 # 如果其他对象与当前对象满足"on"关系并且不是对象本身
-                if other_obj.uid != obj.uid and self.on_relation_check(obj, other_obj):
+                if other_obj.uid != obj.uid and self.on_relation_check(
+                    obj, other_obj
+                ):
                     # set the relation in the graph(在图中设置关系)
                     self.set_relation(obj.uid, other_obj.uid)
                     # save the current valid relations(保存当前有效关系)
                     self.current_relations.add(
-                        (min(obj.uid, other_obj.uid), max(obj.uid, other_obj.uid))
+                        (
+                            min(obj.uid, other_obj.uid),
+                            max(obj.uid, other_obj.uid),
+                        )
                     )
                     # logger.info the relation for debug
                     # logger.info(f"Relation: {obj.uid} - {other_obj.uid}")
@@ -385,7 +394,9 @@ class LocalMapManager(BaseMapManager):
             # 如果没有相关对象，在局部地图中删除并准备全局观测
             if len(related_objs) == 0:
 
-                class_name = self.visualizer.obj_classes.get_classes_arr()[obj.class_id]
+                class_name = self.visualizer.obj_classes.get_classes_arr()[
+                    obj.class_id
+                ]
 
                 # restrict unknown (限制未知标签)
                 if self.cfg.restrict_unknown_labels and class_name == "unknown":
@@ -421,7 +432,9 @@ class LocalMapManager(BaseMapManager):
 
             if is_related_obj_ready:
 
-                class_name = self.visualizer.obj_classes.get_classes_arr()[obj.class_id]
+                class_name = self.visualizer.obj_classes.get_classes_arr()[
+                    obj.class_id
+                ]
 
                 # restrict unknown(限制未知标签)
                 if self.cfg.restrict_unknown_labels and class_name == "unknown":
@@ -445,7 +458,9 @@ class LocalMapManager(BaseMapManager):
 
             return
 
-    def on_relation_check(self, base_obj: LocalObject, test_obj: LocalObject) -> bool:
+    def on_relation_check(
+        self, base_obj: LocalObject, test_obj: LocalObject
+    ) -> bool:
         # test whether the test_obj is related to the base_obj (with "on" relation)
         # return True if related, False otherwise
         """
@@ -459,7 +474,10 @@ class LocalMapManager(BaseMapManager):
 
         # If both objs have no major plane info, return False
         # 如果两个对象都没有主平面信息，返回 False
-        if base_obj.major_plane_info is None and test_obj.major_plane_info is None:
+        if (
+            base_obj.major_plane_info is None
+            and test_obj.major_plane_info is None
+        ):
             return False
 
         # if both objs have major plane info, also return False
@@ -487,11 +505,19 @@ class LocalMapManager(BaseMapManager):
         test_aabb = test_obj.bbox
 
         # Get base_obj and test_obj AABB bounds
-        base_min_bound = base_aabb.get_min_bound()  # return [x_min, y_min, z_min]
-        base_max_bound = base_aabb.get_max_bound()  # return [x_max, y_max, z_max]
+        base_min_bound = (
+            base_aabb.get_min_bound()
+        )  # return [x_min, y_min, z_min]
+        base_max_bound = (
+            base_aabb.get_max_bound()
+        )  # return [x_max, y_max, z_max]
 
-        test_min_bound = test_aabb.get_min_bound()  # return [x_min, y_min, z_min]
-        test_max_bound = test_aabb.get_max_bound()  # return [x_max, y_max, z_max]
+        test_min_bound = (
+            test_aabb.get_min_bound()
+        )  # return [x_min, y_min, z_min]
+        test_max_bound = (
+            test_aabb.get_max_bound()
+        )  # return [x_max, y_max, z_max]
 
         # Get AABB xy range
         base_x_min, base_y_min = base_min_bound[0], base_min_bound[1]
@@ -501,8 +527,12 @@ class LocalMapManager(BaseMapManager):
         test_x_max, test_y_max = test_max_bound[0], test_max_bound[1]
 
         # calculate AABB overlap area in xy plane(计算 xy 平面上的 AABB 重叠区域)
-        overlap_x = max(0, min(base_x_max, test_x_max) - max(base_x_min, test_x_min))
-        overlap_y = max(0, min(base_y_max, test_y_max) - max(base_y_min, test_y_min))
+        overlap_x = max(
+            0, min(base_x_max, test_x_max) - max(base_x_min, test_x_min)
+        )
+        overlap_y = max(
+            0, min(base_y_max, test_y_max) - max(base_y_min, test_y_min)
+        )
 
         # Calculate test_obj AABB area size in xy plane
         # 计算 test_obj AABB 在 xy 平面上的面积大小
@@ -527,7 +557,8 @@ class LocalMapManager(BaseMapManager):
         plane_distance = self.cfg.on_relation.plane_distance
         if not (
             test_min_bound[2] - plane_distance <= base_obj.major_plane_info
-            and base_obj.major_plane_info <= test_min_bound[2] + (plane_distance * 2)
+            and base_obj.major_plane_info
+            <= test_min_bound[2] + (plane_distance * 2)
         ):
             return False
 
@@ -544,13 +575,17 @@ class LocalMapManager(BaseMapManager):
         # 设置全局观测信息
         curr_obs.uid = obj.uid
         curr_obs.class_id = obj.class_id
-        curr_obs.class_name = self.visualizer.obj_classes.get_classes_arr()[obj.class_id]
+        curr_obs.class_name = self.visualizer.obj_classes.get_classes_arr()[
+            obj.class_id
+        ]
         curr_obs.pcd = obj.pcd
         curr_obs.bbox = obj.pcd.get_axis_aligned_bounding_box()
         curr_obs.clip_ft = obj.clip_ft
         # Use configurable voxel size for downsampling
         # 使用可配置的体素大小进行下采样
-        pcd_2d = obj.voxel_downsample_2d(obj.pcd, self.cfg.downsample_voxel_size)
+        pcd_2d = obj.voxel_downsample_2d(
+            obj.pcd, self.cfg.downsample_voxel_size
+        )
         curr_obs.pcd_2d = pcd_2d
         curr_obs.bbox_2d = pcd_2d.get_axis_aligned_bounding_box()
 
@@ -558,13 +593,16 @@ class LocalMapManager(BaseMapManager):
             curr_obs.cropped_image = obj.observations[0].cropped_image
             curr_obs.masked_image = obj.observations[0].masked_image
             for observation in obj.observations:
-                if len(curr_obs.cropped_images)<5:
+                if len(curr_obs.cropped_images) < 5:
                     curr_obs.cropped_images.append(observation.cropped_image)
                     curr_obs.masked_images.append(observation.masked_image)
                 else:
-                    curr_obs.cropped_images[random.randint(0,4)] = observation.cropped_image
-                    curr_obs.masked_images[random.randint(0,4)] = observation.masked_image
-
+                    curr_obs.cropped_images[random.randint(0, 4)] = (
+                        observation.cropped_image
+                    )
+                    curr_obs.masked_images[random.randint(0, 4)] = (
+                        observation.masked_image
+                    )
 
         if related_objs:
             for related_obj in related_objs:
@@ -609,7 +647,8 @@ class LocalMapManager(BaseMapManager):
 
         split_info = obj.print_split_info()
         logger.info(
-            "[LocalMap][Split] Split Local Object, splitted info: %s" % split_info
+            "[LocalMap][Split] Split Local Object, splitted info: %s"
+            % split_info
         )
 
         # find the obj in local map by using uid(通过uid在局部地图中找到对象)
@@ -627,7 +666,9 @@ class LocalMapManager(BaseMapManager):
         for i, obj in enumerate(self.local_map):
             if obj.save_path is not None:
                 # Update object save path to use timestamped directory
-                obj.save_path = os.path.join(map_save_path, f"local_obj_{i:04d}.pkl")
+                obj.save_path = os.path.join(
+                    map_save_path, f"local_obj_{i:04d}.pkl"
+                )
                 logger.info(f"[LocalMap] Saving No.{i} obj: {obj.save_path}")
                 obj.save_to_disk()
             else:
@@ -662,7 +703,9 @@ class LocalMapManager(BaseMapManager):
                 new_local_map.append(self.local_map[indices[0]])
             else:
                 new_local_map.append(
-                    self.merge_local_object([self.local_map[i] for i in indices])
+                    self.merge_local_object(
+                        [self.local_map[i] for i in indices]
+                    )
                 )
         # New local map is generated
         # 生成新的局部地图
@@ -720,7 +763,9 @@ class LocalMapManager(BaseMapManager):
             if local_obj.observed_num <= 2:
                 continue
 
-            obj_name = self.visualizer.obj_classes.get_classes_arr()[local_obj.class_id]
+            obj_name = self.visualizer.obj_classes.get_classes_arr()[
+                local_obj.class_id
+            ]
 
             # Ignore ceiling wall
             # 忽略天花板墙
@@ -728,7 +773,7 @@ class LocalMapManager(BaseMapManager):
                 obj_name == "ceiling wall"
                 or obj_name == "carpet"  # 地毯
                 or obj_name == "rug"  # 毛皮地毯
-                or obj_name == "ceiling_molding"# 天花板装饰条
+                or obj_name == "ceiling_molding"  # 天花板装饰条
             ):
                 continue
 
@@ -741,7 +786,9 @@ class LocalMapManager(BaseMapManager):
             positions = np.asarray(local_obj.pcd.points)
             colors = np.asarray(local_obj.pcd.colors) * 255
             colors = colors.astype(np.uint8)
-            curr_obj_color = self.visualizer.obj_classes.get_class_color(obj_name)
+            curr_obj_color = self.visualizer.obj_classes.get_class_color(
+                obj_name
+            )
 
             obj_names.append(obj_name)
             obj_colors.append(curr_obj_color)
@@ -749,7 +796,9 @@ class LocalMapManager(BaseMapManager):
             if self.cfg.show_local_entities:
 
                 # Log pcd data
-                rgb_pcd_entity = base_entity_path + "/rgb_pcd" + f"/{local_obj.uid}"
+                rgb_pcd_entity = (
+                    base_entity_path + "/rgb_pcd" + f"/{local_obj.uid}"
+                )
                 self.visualizer.log(
                     rgb_pcd_entity,
                     # entity_path + "/pcd",
@@ -765,7 +814,9 @@ class LocalMapManager(BaseMapManager):
                 )
 
                 # Log pcd data
-                sem_pcd_entity = base_entity_path + "/sem_pcd" + f"/{local_obj.uid}"
+                sem_pcd_entity = (
+                    base_entity_path + "/sem_pcd" + f"/{local_obj.uid}"
+                )
                 self.visualizer.log(
                     sem_pcd_entity,
                     # entity_path + "/pcd",
@@ -866,7 +917,11 @@ class LocalMapManager(BaseMapManager):
 
                 for idx, data in enumerate(obj_class_id_counter.most_common()):
                     class_labels = (
-                        class_labels + str(data[0]) + "_(" + str(data[1]) + ")||"
+                        class_labels
+                        + str(data[0])
+                        + "_("
+                        + str(data[1])
+                        + ")||"
                     )
 
                 # Split info
@@ -940,7 +995,9 @@ class LocalMapManager(BaseMapManager):
                         status=str(local_obj.status),
                         status_pending_count=int(local_obj.pending_count),
                         status_waiting_count=int(local_obj.waiting_count),
-                        last_seen_idx=int(local_obj.get_latest_observation().idx),
+                        last_seen_idx=int(
+                            local_obj.get_latest_observation().idx
+                        ),
                         related_num=int(related_num),
                         late_class_id=int(lateset_class_id),
                         late_class_conf=float(lateset_class_conf),
@@ -979,7 +1036,9 @@ class LocalMapManager(BaseMapManager):
 
                 # On relation visualization
                 # "On" 关系可视化
-                relation_entity = base_entity_path + "/relation" + f"/{local_obj.uid}"
+                relation_entity = (
+                    base_entity_path + "/relation" + f"/{local_obj.uid}"
+                )
                 # Get all related objects in the graph (获取图中所有相关对象)
                 related_objs = self.get_related_objects(local_obj.uid)
                 if local_obj.is_low_mobility and len(related_objs) > 0:
@@ -998,7 +1057,9 @@ class LocalMapManager(BaseMapManager):
                         related_obj_center = related_obj.bbox.get_center()
 
                         all_lines.append(
-                            np.vstack([local_obj_center, related_obj_center]).tolist()
+                            np.vstack(
+                                [local_obj_center, related_obj_center]
+                            ).tolist()
                         )
 
                     self.visualizer.log(
@@ -1035,9 +1096,7 @@ class LocalMapManager(BaseMapManager):
             self.visualizer.log(
                 local_path_entity,
                 self.visualizer.LineStrips3D(
-                    [
-                        path_points.tolist()
-                    ],  # 将点列表转换为所需格式
+                    [path_points.tolist()],  # 将点列表转换为所需格式
                     colors=[[0, 128, 255]],  # 路径为绿色
                 ),
             )
@@ -1069,7 +1128,9 @@ class LocalMapManager(BaseMapManager):
         for obj in self.local_map:
             if obj.observed_num <= 3:
                 continue
-            obj_name = self.visualizer.obj_classes.get_classes_arr()[obj.class_id]
+            obj_name = self.visualizer.obj_classes.get_classes_arr()[
+                obj.class_id
+            ]
             # Ignore ceiling wall(忽略天花板墙)
             if (
                 obj_name == "ceiling wall"
@@ -1104,7 +1165,9 @@ class LocalMapManager(BaseMapManager):
         curr_position = curr_pose[:3, 3]
         start_position = nav_graph.calculate_pos_2d(curr_position)
 
-        goal_position = self.get_goal_position(nav_graph, start_position, goal_mode)
+        goal_position = self.get_goal_position(
+            nav_graph, start_position, goal_mode
+        )
 
         if goal_position is None:
             logger.warning("[LocalMap][Path] No goal position found!")
@@ -1129,7 +1192,9 @@ class LocalMapManager(BaseMapManager):
             logger.info("[LocalMap][Path] Local Goal mode: INQUIRY")
             # Step 1, find local objects within the global best candidate
             # 步骤1: 在全局的最佳候选位置处寻找局部对象
-            candidate_objects = self.filter_objects_in_global_bbox(expand_ratio=0.1)
+            candidate_objects = self.filter_objects_in_global_bbox(
+                expand_ratio=0.1
+            )
 
             if len(candidate_objects) == 0:
                 logger.warning(
@@ -1211,8 +1276,12 @@ class LocalMapManager(BaseMapManager):
             obj_bbox = obj.bbox
 
             # Project the object's bbox onto the xy-plane (ignore z)
-            obj_min_xy = np.array([obj_bbox.min_bound[0], obj_bbox.min_bound[1]])
-            obj_max_xy = np.array([obj_bbox.max_bound[0], obj_bbox.max_bound[1]])
+            obj_min_xy = np.array(
+                [obj_bbox.min_bound[0], obj_bbox.min_bound[1]]
+            )
+            obj_max_xy = np.array(
+                [obj_bbox.max_bound[0], obj_bbox.max_bound[1]]
+            )
 
             # Check if the object's bbox intersects with the expanded global bbox in the xy-plane
             if (
@@ -1245,8 +1314,12 @@ class LocalMapManager(BaseMapManager):
             max_sim = F.cosine_similarity(
                 text_query_ft.unsqueeze(0), obj_feat.unsqueeze(0), dim=-1
             ).item()
-            obj_name = self.visualizer.obj_classes.get_classes_arr()[obj.class_id]
-            logger.info(f"[LocalMap][Inquiry] =========={obj_name}==============")
+            obj_name = self.visualizer.obj_classes.get_classes_arr()[
+                obj.class_id
+            ]
+            logger.info(
+                f"[LocalMap][Inquiry] =========={obj_name}=============="
+            )
             logger.info(f"[LocalMap][Inquiry] Itself: \t{max_sim:.3f}")
 
             # Store the maximum similarity for this object
@@ -1276,7 +1349,9 @@ class LocalMapManager(BaseMapManager):
         # 为可视化设置最佳候选对象的标志
         best_candidate.nav_goal = True
 
-        logger.info(f"[LocalMap][Inquiry] global score: {self.global_score:.3f} ")
+        logger.info(
+            f"[LocalMap][Inquiry] global score: {self.global_score:.3f} "
+        )
 
         return best_candidate, best_similarity
 
@@ -1314,9 +1389,7 @@ class LocalMapManager(BaseMapManager):
 
             # Calculate rotation matrix difference
             # 计算旋转矩阵差异
-            delta_rotation_matrix = (
-                curr_rot @ prev_rot.T
-            )
+            delta_rotation_matrix = curr_rot @ prev_rot.T
             # Current rotation matrix multiplied by previous frame rotation matrix transpose
             # 当前旋转矩阵乘以先前帧旋转矩阵的转置
             angle = np.arccos(

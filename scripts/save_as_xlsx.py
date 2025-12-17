@@ -5,7 +5,9 @@ import os
 import xlsxwriter
 
 # ========== Argument Parser ==========
-parser = argparse.ArgumentParser(description="Generate XLSX from evaluation results.")
+parser = argparse.ArgumentParser(
+    description="Generate XLSX from evaluation results."
+)
 parser.add_argument(
     "--dataset",
     type=str,
@@ -14,7 +16,10 @@ parser.add_argument(
     help="Dataset name",
 )
 parser.add_argument(
-    "--eval_path", type=str, required=True, help="Path to the evaluation output folder"
+    "--eval_path",
+    type=str,
+    required=True,
+    help="Path to the evaluation output folder",
 )
 
 args = parser.parse_args()
@@ -50,7 +55,9 @@ save_path = f"{folder_name.replace('-', '_')}.{dataset_name}.xlsx"
 auc, fmiou, macc, miou, obj_num = [], [], [], [], []
 
 for scene_id in scene_ids:
-    result_path = os.path.join(eval_path, f"{dataset_name}_{scene_id}", "results.json")
+    result_path = os.path.join(
+        eval_path, f"{dataset_name}_{scene_id}", "results.json"
+    )
     with open(result_path) as f:
         data = json.load(f)
     auc.append(data["auc"])

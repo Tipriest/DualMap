@@ -57,7 +57,7 @@ class Dualmap:
         self.visualizer.spawn()
 
         # Keyframe Selection
-        self.curr_frame_id:int = 0
+        self.curr_frame_id: int = 0
         self.keyframe_counter = 0
         self.last_keyframe_time = None
         self.last_keyframe_pose = None
@@ -84,7 +84,9 @@ class Dualmap:
 
             # only generate wall.pcd if it doesn't exist
             if self.global_map_manager.layout_map.wall_pcd is None:
-                logger.warning("[Core][Init] wall.pcd not found, generating from layout.pcd...")
+                logger.warning(
+                    "[Core][Init] wall.pcd not found, generating from layout.pcd..."
+                )
                 layout_pcd = self.detector.get_layout_pointcloud()
                 self.global_map_manager.set_layout_info(layout_pcd)
 
@@ -98,7 +100,9 @@ class Dualmap:
 
         # flags for monitoring
         self.calculate_path = False  # Flag for calculating global path
-        self.reset_cal_path_flag = False  # Flag for resetting global path calculation
+        self.reset_cal_path_flag = (
+            False  # Flag for resetting global path calculation
+        )
         self.trigger_find_next = (
             False  # Flag for triggering the next global path planning
         )
@@ -208,7 +212,9 @@ class Dualmap:
             if angle_diff >= self.rotation_threshold:
                 self.last_keyframe_time = time_stamp
                 self.last_keyframe_pose = curr_pose
-                logger.info("[Core][CheckKeyframe] New keyframe detected by rotation")
+                logger.info(
+                    "[Core][CheckKeyframe] New keyframe detected by rotation"
+                )
                 is_keyframe = True
 
         # Time check
@@ -224,7 +230,8 @@ class Dualmap:
         if is_keyframe:
             self.keyframe_counter += 1
             logger.info(
-                "[Core][CheckKeyframe] Current frame is keyframe: %s", self.keyframe_counter
+                "[Core][CheckKeyframe] Current frame is keyframe: %s",
+                self.keyframe_counter,
             )
             return True
         else:
@@ -233,7 +240,9 @@ class Dualmap:
 
     def get_total_memory_by_keyword(self, keyword="applications"):
         total_rss = 0
-        for proc in psutil.process_iter(["pid", "name", "cmdline", "memory_info"]):
+        for proc in psutil.process_iter(
+            ["pid", "name", "cmdline", "memory_info"]
+        ):
             try:
                 cmdline = proc.info.get("cmdline")
                 if isinstance(cmdline, list) and keyword in " ".join(cmdline):
@@ -357,7 +366,9 @@ class Dualmap:
             # self.detector.visualize_memory(mem_usage)
 
         if self.calculate_path and self.global_map_manager.has_global_map():
-            logger.info("[Core] Global Navigation enabled! Triggering functionality...")
+            logger.info(
+                "[Core] Global Navigation enabled! Triggering functionality..."
+            )
 
             self.global_map_manager.has_action_path = False
 
@@ -373,15 +384,19 @@ class Dualmap:
 
             # calculate the path based on current global map
             # Get 3D path point in world coordinate
-            self.curr_global_path = self.global_map_manager.calculate_global_path(
-                self.curr_pose, goal_mode=self.get_goal_mode
+            self.curr_global_path = (
+                self.global_map_manager.calculate_global_path(
+                    self.curr_pose, goal_mode=self.get_goal_mode
+                )
             )
 
             if self.cfg.save_all_path:
                 # Create a unique file name using the counter
                 self.path_counter += 1
 
-                save_dir = os.path.join(self.cfg.output_path, "path", "global_path")
+                save_dir = os.path.join(
+                    self.cfg.output_path, "path", "global_path"
+                )
                 if not os.path.exists(save_dir):
                     os.makedirs(save_dir)
 
@@ -416,7 +431,9 @@ class Dualmap:
         # Local Path Planning
         # Local need global plan success
         if self.begin_local_planning and self.local_map_manager.has_local_map():
-            logger.info("[Core] Local Navigation enabled! Triggering functionality...")
+            logger.info(
+                "[Core] Local Navigation enabled! Triggering functionality..."
+            )
             # set the global inquiry sentence to global map manager
             self.local_map_manager.inquiry = self.inquiry_feat
 
@@ -495,7 +512,9 @@ class Dualmap:
 
                 if self.cfg.save_all_path:
                     # Ensure the path directory exists
-                    save_dir = os.path.join(self.cfg.output_path, "path", "local_path")
+                    save_dir = os.path.join(
+                        self.cfg.output_path, "path", "local_path"
+                    )
                     if not os.path.exists(save_dir):
                         os.makedirs(save_dir)
 
@@ -547,11 +566,15 @@ class Dualmap:
 
                 # Get global observations
                 with timing_context("Global Mapping", self):
-                    global_obs_list = self.local_map_manager.get_global_observations()
+                    global_obs_list = (
+                        self.local_map_manager.get_global_observations()
+                    )
                     self.local_map_manager.clear_global_observations()
 
                     # Global Mapping
-                    self.global_map_manager.process_observations(global_obs_list)
+                    self.global_map_manager.process_observations(
+                        global_obs_list
+                    )
 
                 # Get memory usage statistics of local and global maps
                 # mem_stats = get_map_memory_usage(self.local_map_manager.local_map,
@@ -567,7 +590,9 @@ class Dualmap:
 
     def get_action_path(self):
         if self.curr_global_path is None:
-            logger.info("[Core][ActionPath] No Global Path! Action Path not available!")
+            logger.info(
+                "[Core][ActionPath] No Global Path! Action Path not available!"
+            )
             self.action_path = None
             self.global_map_manager.action_path = self.action_path
             return
@@ -597,7 +622,9 @@ class Dualmap:
 
             if self.cfg.save_all_path:
                 # Ensure the path directory exists
-                save_dir = os.path.join(self.cfg.output_path, "path", "action_path")
+                save_dir = os.path.join(
+                    self.cfg.output_path, "path", "action_path"
+                )
                 if not os.path.exists(save_dir):
                     os.makedirs(save_dir)
 
@@ -630,7 +657,9 @@ class Dualmap:
 
         for i in range(end_range):
             # Set timestamp for visualizer
-            logger.info("[Core][EndProcess] End Counter: %d", end_frame_id + i + 1)
+            logger.info(
+                "[Core][EndProcess] End Counter: %d", end_frame_id + i + 1
+            )
             self.visualizer.set_time_sequence("frame", end_frame_id + i + 1)
 
             # local end_process
@@ -638,20 +667,25 @@ class Dualmap:
             self.local_map_manager.set_curr_idx(end_frame_id + i + 1)
             self.local_map_manager.end_process()
             local_map_obj_num = len(self.local_map_manager.local_map)
-            logger.info("[Core][EndProcess] Local Objects num: %d", local_map_obj_num)
+            logger.info(
+                "[Core][EndProcess] Local Objects num: %d", local_map_obj_num
+            )
 
             # global process
             global_obs_list = self.local_map_manager.get_global_observations()
             self.local_map_manager.clear_global_observations()
             self.global_map_manager.process_observations(global_obs_list)
             global_map_obj_num = len(self.global_map_manager.global_map)
-            logger.info("[Core][EndProcess] Global Objects num: %d", global_map_obj_num)
+            logger.info(
+                "[Core][EndProcess] Global Objects num: %d", global_map_obj_num
+            )
 
             # 提前退出机制:
             # 当局部地图中没有待处理对象的时候，说明所有数据已经处理完毕，可以提前结束
             if local_map_obj_num == 0:
                 logger.warning(
-                    "[EndProcess] End Processing End. to: %d", end_frame_id + i + 1
+                    "[EndProcess] End Processing End. to: %d",
+                    end_frame_id + i + 1,
                 )
                 break
 
@@ -696,9 +730,13 @@ class Dualmap:
         if hasattr(self.detector, "timing_results"):
             print_timing_results("Detector", self.detector.timing_results)
             detector_time_path = os.path.join(session_dir, "detector_time.csv")
-            save_timing_results(self.detector.timing_results, detector_time_path)
+            save_timing_results(
+                self.detector.timing_results, detector_time_path
+            )
 
-        logger.info(f"[Core] All results saved to session directory: {session_dir}")
+        logger.info(
+            f"[Core] All results saved to session directory: {session_dir}"
+        )
 
     def monitor_config_file(self, config_file_path: str):
         """
@@ -791,7 +829,9 @@ class Dualmap:
                         f"[Core][Monitor] Config file not found: {config_file}"
                     )
             except Exception as e:
-                logger.error(f"[Core][Monitor] Error monitoring config file: {e}")
+                logger.error(
+                    f"[Core][Monitor] Error monitoring config file: {e}"
+                )
 
             # Wait for the specified interval before checking again
             time.sleep(self.cfg.monitor_interval)
@@ -821,8 +861,12 @@ class Dualmap:
         logger.info("[Core] Stopped monitoring config file and mapping thread.")
 
     def convert_inquiry_to_feat(self, inquiry_sentence: str):
-        text_query_tokenized = self.detector.clip_tokenizer(inquiry_sentence).to("cuda")
-        text_query_ft = self.detector.clip_model.encode_text(text_query_tokenized)
+        text_query_tokenized = self.detector.clip_tokenizer(
+            inquiry_sentence
+        ).to("cuda")
+        text_query_ft = self.detector.clip_model.encode_text(
+            text_query_tokenized
+        )
         text_query_ft = text_query_ft / text_query_ft.norm(dim=-1, keepdim=True)
         text_query_ft = text_query_ft.squeeze()
 

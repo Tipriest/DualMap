@@ -12,19 +12,23 @@ from tabulate import tabulate
 # Set up the module-level logger
 logger = logging.getLogger(__name__)
 
+
 def get_timestamp_string():
     """Generate a timestamp string for file/directory naming."""
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
-def get_timestamped_path(base_path: str, prefix: str = "", suffix: str = "") -> str:
+
+def get_timestamped_path(
+    base_path: str, prefix: str = "", suffix: str = ""
+) -> str:
     """
     Generate a timestamped path for saving results.
-    
+
     Args:
         base_path: Base directory path
         prefix: Optional prefix for the timestamp directory
         suffix: Optional suffix for the timestamp directory
-    
+
     Returns:
         Timestamped path string
     """
@@ -37,10 +41,8 @@ def get_timestamped_path(base_path: str, prefix: str = "", suffix: str = "") -> 
         timestamped_dir = f"{timestamp}_{suffix}"
     else:
         timestamped_dir = timestamp
-    
+
     return os.path.join(base_path, timestamped_dir)
-
-
 
 
 @contextmanager
@@ -170,4 +172,7 @@ def save_timing_results(timing_results, csv_file):
 def get_map_memory_usage(local_map, global_map):
     local_mb = asizeof.asizeof(local_map) / 1024 / 1024
     global_mb = asizeof.asizeof(global_map) / 1024 / 1024
-    return {"local_map_mb": round(local_mb, 4), "global_map_mb": round(global_mb, 4)}
+    return {
+        "local_map_mb": round(local_mb, 4),
+        "global_map_mb": round(global_mb, 4),
+    }

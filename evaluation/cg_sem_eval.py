@@ -35,7 +35,9 @@ class CGEvaluator(Evaluator):
             logging.info(f"Error: {self.cg_result_path} does not exist.")
             sys.exit(1)
 
-        logging.info("Loading saved obj results from: {}".format(self.cg_result_path))
+        logging.info(
+            "Loading saved obj results from: {}".format(self.cg_result_path)
+        )
 
         pkl_path = self.cg_result_path
 
@@ -83,15 +85,19 @@ class CGEvaluator(Evaluator):
                 seg_full_pcd += obj.pcd.paint_uniform_color(color)
 
             o3d.io.write_point_cloud(
-                os.path.join(self.output_dir, "pred_rgb_pcd_full.pcd"), rgb_full_pcd
+                os.path.join(self.output_dir, "pred_rgb_pcd_full.pcd"),
+                rgb_full_pcd,
             )
             o3d.io.write_point_cloud(
-                os.path.join(self.output_dir, "pred_seg_pcd_full.pcd"), seg_full_pcd
+                os.path.join(self.output_dir, "pred_seg_pcd_full.pcd"),
+                seg_full_pcd,
             )
 
 
 @measure_time_block("Evaluation Time")
-@hydra.main(version_base=None, config_path="../config/", config_name="seg_evaluation")
+@hydra.main(
+    version_base=None, config_path="../config/", config_name="seg_evaluation"
+)
 def main(cfg: DictConfig):
     evaluator = CGEvaluator(cfg)
     dataset_name = evaluator.get_dataset_name()

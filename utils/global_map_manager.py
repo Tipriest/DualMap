@@ -44,7 +44,11 @@ class GlobalMapManager(BaseMapManager):
         # layout information --> LayoutMap
         layout_resolution = self.cfg.layout_voxel_size * 2
         self.layout_map = LayoutMap(
-            cfg, resolution=layout_resolution, percentile=90, min_area=5, kernel_size=3
+            cfg,
+            resolution=layout_resolution,
+            percentile=90,
+            min_area=5,
+            kernel_size=3,
         )
 
         # pass to the local map manager for inquiry
@@ -72,7 +76,9 @@ class GlobalMapManager(BaseMapManager):
                 num_samples_per_grid=10, z_value=self.cfg.floor_height
             )
 
-    def process_observations(self, curr_observations: List[Observation]) -> None:
+    def process_observations(
+        self, curr_observations: List[Observation]
+    ) -> None:
         """这是全局地图管理器的核心处理函数, 负责处理从局部地图传递来的观测数据, 并更新全局地图
 
         Args:
@@ -81,20 +87,22 @@ class GlobalMapManager(BaseMapManager):
 
         # for debug, show the preload global map
         # 如果已经预加载了全局地图，先可视化一次
-            # 用于调试，查看预加载地图的状态
-            # 仅在地图非空且启用 Rerun 时执行
+        # 用于调试，查看预加载地图的状态
+        # 仅在地图非空且启用 Rerun 时执行
         if len(self.global_map) > 0 and self.cfg.use_rerun:
             self.visualize_global_map()
 
         # 空观测直接返回
         if len(curr_observations) == 0:
-            logger.info("[GlobalMap] No global observation update this time, return")
+            logger.info(
+                "[GlobalMap] No global observation update this time, return"
+            )
             return
 
         # 第一次接收到观测数据时
-            # 将每个观测直接转换为全局对象
-            # 无需匹配，因为地图为空(FIXME: 这里会不会和预加载地图冲突?)
-            # 设置初始化标志
+        # 将每个观测直接转换为全局对象
+        # 无需匹配，因为地图为空(FIXME: 这里会不会和预加载地图冲突?)
+        # 设置初始化标志
         if self.is_initialized == False:
             # Init the global map
             logger.info("[GlobalMap] Init Global Map by first Local Map input")
@@ -104,9 +112,9 @@ class GlobalMapManager(BaseMapManager):
 
         # The test part, no matching just adding
         # 无更新模式，测试用
-            # 作用：测试模式，不进行匹配，直接添加所有观测为新对象
-            # 用于测试可视化或数据收集
-            # 绕过匹配逻辑，每个观测都成为独立对象
+        # 作用：测试模式，不进行匹配，直接添加所有观测为新对象
+        # 用于测试可视化或数据收集
+        # 绕过匹配逻辑，每个观测都成为独立对象
         if self.cfg.no_update:
             logger.info("[GlobalMap] No update mode, simply adding")
             for obs in curr_observations:
@@ -182,7 +190,9 @@ class GlobalMapManager(BaseMapManager):
 
         for i, obj in enumerate(self.global_map):
             # Update object save path to use timestamped directory
-            obj.save_path = os.path.join(map_save_path, f"global_obj_{i:04d}_{obj.class_name}.pkl")
+            obj.save_path = os.path.join(
+                map_save_path, f"global_obj_{i:04d}_{obj.class_name}.pkl"
+            )
             logger.info(f"[GlobalMap] Saving No.{i} obj: {obj.save_path}")
             obj.save_obj_to_disk(f"global_obj_{i:04d}_{obj.class_name}")
 
@@ -197,17 +207,28 @@ class GlobalMapManager(BaseMapManager):
         os.makedirs(map_save_path)
 
         self.layout_map.set_layout_pcd(layout_pcd)
-        self.layout_map.extract_wall_pcd(num_samples_per_grid=10, z_value=self.cfg.floor_height)
+        self.layout_map.extract_wall_pcd(
+            num_samples_per_grid=10, z_value=self.cfg.floor_height
+        )
         # Also save wall.pcd in the same timestamped directory
-        if hasattr(self.layout_map, 'wall_pcd') and self.layout_map.wall_pcd is not None:
+        if (
+            hasattr(self.layout_map, "wall_pcd")
+            and self.layout_map.wall_pcd is not None
+        ):
             wall_pcd_path = os.path.join(map_save_path, "wall.pcd")
             o3d.io.write_point_cloud(wall_pcd_path, self.layout_map.wall_pcd)
             logger.info(f"[GlobalMap] Saving Wall pcd to: {wall_pcd_path}")
-        elif not hasattr(self.layout_map, 'wall_pcd'):
-            logger.info(f"[GlobalMap] Wall PCD didn't saved to: {map_save_path}")
-            logger.info(f"hasattr(self.layout_map, 'wall_pcd'): {hasattr(self.layout_map, 'wall_pcd')}")
-        elif self.layout_map.wall_pcd is  None:
-            logger.info(f"[GlobalMap] Wall PCD didn't saved to: {map_save_path}")
+        elif not hasattr(self.layout_map, "wall_pcd"):
+            logger.info(
+                f"[GlobalMap] Wall PCD didn't saved to: {map_save_path}"
+            )
+            logger.info(
+                f"hasattr(self.layout_map, 'wall_pcd'): {hasattr(self.layout_map, 'wall_pcd')}"
+            )
+        elif self.layout_map.wall_pcd is None:
+            logger.info(
+                f"[GlobalMap] Wall PCD didn't saved to: {map_save_path}"
+            )
             logger.info("self.layout_map.wall_pcd is  None")
 
     def load_global_map(self) -> None:
@@ -218,7 +239,9 @@ class GlobalMapManager(BaseMapManager):
         # Use preload_global_map_path first, if not exists then use map_save_path
         if os.path.exists(self.cfg.preload_path):
             load_dir = self.cfg.preload_path
-            logger.info(f"[GlobalMap] Using preload global map path: {load_dir}")
+            logger.info(
+                f"[GlobalMap] Using preload global map path: {load_dir}"
+            )
         else:
             load_dir = self.cfg.map_save_path
             logger.info(
@@ -233,7 +256,9 @@ class GlobalMapManager(BaseMapManager):
             return
 
         # Get .pkl files in directory
-        pkl_files = [file for file in os.listdir(load_dir) if file.endswith(".pkl")]
+        pkl_files = [
+            file for file in os.listdir(load_dir) if file.endswith(".pkl")
+        ]
 
         # Skip loading if no .pkl files
         if not pkl_files:
@@ -258,7 +283,9 @@ class GlobalMapManager(BaseMapManager):
 
                 # After modifying, convert it back to open3d Vector3dVector if needed
                 loaded_obj.pcd_2d.points = o3d.utility.Vector3dVector(points)
-                loaded_obj.bbox_2d = loaded_obj.pcd_2d.get_axis_aligned_bounding_box()
+                loaded_obj.bbox_2d = (
+                    loaded_obj.pcd_2d.get_axis_aligned_bounding_box()
+                )
                 loaded_obj.pose = loaded_obj.bbox_2d.get_center()
 
             self.global_map.append(loaded_obj)
@@ -266,7 +293,9 @@ class GlobalMapManager(BaseMapManager):
         logger.info(
             f"[GlobalMap] Successfully preloaded {len(self.global_map)} objects"
         )
-        print(f"[GlobalMap] Successfully preloaded {len(self.global_map)} objects")
+        print(
+            f"[GlobalMap] Successfully preloaded {len(self.global_map)} objects"
+        )
         self.is_initialized = True
 
     def load_wall(self) -> None:
@@ -283,7 +312,9 @@ class GlobalMapManager(BaseMapManager):
         wall_pcd_path = os.path.join(load_dir, "wall.pcd")
 
         if not Path(wall_pcd_path).is_file():
-            logger.warning(f"[GlobalMap] wall file not found at: {wall_pcd_path}")
+            logger.warning(
+                f"[GlobalMap] wall file not found at: {wall_pcd_path}"
+            )
             return None
 
         # load wall pcd
@@ -353,9 +384,9 @@ class GlobalMapManager(BaseMapManager):
         # 2. 可视化预加载路径
         if self.preload_path_ok is False and self.cfg.use_given_path:
             # 作用：加载并渲染预定义的多条路径
-                # 从 JSON 文件读取路径坐标
-                # 使用 LineStrips3D 连接路径点
-                # 只执行一次(静态路径)
+            # 从 JSON 文件读取路径坐标
+            # 使用 LineStrips3D 连接路径点
+            # 只执行一次(静态路径)
             json_data = self.read_json_files(self.cfg.given_path_dir)
             # traverse all the json data
             for key, value in json_data.items():
@@ -402,13 +433,18 @@ class GlobalMapManager(BaseMapManager):
             colors = colors.astype(np.uint8)
 
             # 动态颜色设置
-            curr_obj_color = self.visualizer.obj_classes.get_class_color(obj_name)
+            curr_obj_color = self.visualizer.obj_classes.get_class_color(
+                obj_name
+            )
             # 导航目标标记为红色
             if global_obj.nav_goal:
                 # set red
                 curr_obj_color = (255, 0, 0)
             # 如果有导航路径，非目标对象变灰
-            if self.nav_graph is not None and self.nav_graph.pos_path is not None:
+            if (
+                self.nav_graph is not None
+                and self.nav_graph.pos_path is not None
+            ):
                 if global_obj.nav_goal:
                     # set red
                     curr_obj_color = (255, 0, 0)
@@ -419,7 +455,9 @@ class GlobalMapManager(BaseMapManager):
             related_num = len(global_obj.related_objs)
 
             # 渲染点云
-            rgb_pcd_entity = base_entity_path + "/rgb_pcd" + f"/{global_obj.uid}"
+            rgb_pcd_entity = (
+                base_entity_path + "/rgb_pcd" + f"/{global_obj.uid}"
+            )
             self.visualizer.log(
                 rgb_pcd_entity,
                 # entity_path + "/pcd",
@@ -474,12 +512,18 @@ class GlobalMapManager(BaseMapManager):
 
                 # get color
                 class_id = global_obj.related_color[i]
-                obj_name = self.visualizer.obj_classes.get_classes_arr()[class_id]
-                obj_color = self.visualizer.obj_classes.get_class_color(obj_name)
+                obj_name = self.visualizer.obj_classes.get_classes_arr()[
+                    class_id
+                ]
+                obj_color = self.visualizer.obj_classes.get_class_color(
+                    obj_name
+                )
 
                 # 1️⃣ 渲染关联对象的小边界框
                 related_bbox_entity = (
-                    base_entity_path + "/related_bbox" + f"/{global_obj.uid}_{i}"
+                    base_entity_path
+                    + "/related_bbox"
+                    + f"/{global_obj.uid}_{i}"
                 )
                 self.visualizer.log(
                     related_bbox_entity,
@@ -504,7 +548,9 @@ class GlobalMapManager(BaseMapManager):
                 title_half_size = np.array([s, s, s])
 
                 related_title_entity = (
-                    base_entity_path + "/related_title" + f"/{global_obj.uid}_{i}"
+                    base_entity_path
+                    + "/related_title"
+                    + f"/{global_obj.uid}_{i}"
                 )
                 self.visualizer.log(
                     related_title_entity,
@@ -519,10 +565,11 @@ class GlobalMapManager(BaseMapManager):
                     self.visualizer.AnyValues(uuid=str(global_obj.uid)),
                 )
 
-
                 # 3️⃣ 渲染连接线(从地面到悬浮高度)
                 related_line_entity = (
-                    base_entity_path + "/related_line" + f"/{global_obj.uid}_{i}"
+                    base_entity_path
+                    + "/related_line"
+                    + f"/{global_obj.uid}_{i}"
                 )
 
                 self.visualizer.log(
@@ -550,7 +597,9 @@ class GlobalMapManager(BaseMapManager):
                 centers = [bbox_3d.get_center()]
                 half_sizes = [bbox_3d.get_extent() / 2]
 
-                bbox_3d_entity = base_entity_path + "/bbox_3d" + f"/{global_obj.uid}"
+                bbox_3d_entity = (
+                    base_entity_path + "/bbox_3d" + f"/{global_obj.uid}"
+                )
 
                 self.visualizer.log(
                     bbox_3d_entity,
@@ -617,9 +666,9 @@ class GlobalMapManager(BaseMapManager):
             new_logged_entities.add(action_path_entity)
 
         # 6. 清理未使用的实体
-            # 比较上一帧和当前帧的实体列表
-            # 删除不再存在的对象（例如被删除的对象）
-            # 防止可视化窗口中累积无效数据
+        # 比较上一帧和当前帧的实体列表
+        # 删除不再存在的对象（例如被删除的对象）
+        # 防止可视化窗口中累积无效数据
         if len(self.prev_entities) != 0:
             for entity_path in self.prev_entities:
                 if entity_path not in new_logged_entities:
@@ -663,7 +712,9 @@ class GlobalMapManager(BaseMapManager):
         start_position = nav_graph.calculate_pos_2d(curr_position)
 
         # Select and process goal based on mode
-        goal_position = self.get_goal_position(nav_graph, start_position, goal_mode)
+        goal_position = self.get_goal_position(
+            nav_graph, start_position, goal_mode
+        )
 
         # Find shortest path
         if goal_position is not None:
@@ -672,7 +723,9 @@ class GlobalMapManager(BaseMapManager):
                 logger.info("[GlobalMap][Path] Path successfully generated.")
                 return nav_graph.pos_path
             else:
-                logger.info("[GlobalMap][Path] Failed to generate a valid path.")
+                logger.info(
+                    "[GlobalMap][Path] Failed to generate a valid path."
+                )
                 return None
         else:
             logger.info("[GlobalMap][Path] No valid goal position provided.")
@@ -705,7 +758,9 @@ class GlobalMapManager(BaseMapManager):
 
             global_goal_candidate = None
 
-            global_goal_candidate, score = self.find_best_candidate_with_inquiry()
+            global_goal_candidate, score = (
+                self.find_best_candidate_with_inquiry()
+            )
 
             # Get center of the best candidate
             goal_3d = global_goal_candidate.bbox_2d.get_center()
@@ -770,15 +825,21 @@ class GlobalMapManager(BaseMapManager):
             max_sim = F.cosine_similarity(
                 text_query_ft.unsqueeze(0), obj_feat.unsqueeze(0), dim=-1
             ).item()
-            obj_name = self.visualizer.obj_classes.get_classes_arr()[obj.class_id]
-            logger.info(f"[GlobalMap][Inquiry] =========={obj_name}==============")
+            obj_name = self.visualizer.obj_classes.get_classes_arr()[
+                obj.class_id
+            ]
+            logger.info(
+                f"[GlobalMap][Inquiry] =========={obj_name}=============="
+            )
             logger.info(f"[GlobalMap][Inquiry] Itself: \t{max_sim:.3f}")
 
             # Check if there are related objects, if so calculate cosine similarity with related_objs
             if obj.related_objs:
                 related_sims = []
                 for related_obj_ft in obj.related_objs:
-                    related_obj_ft_tensor = torch.from_numpy(related_obj_ft).to("cuda")
+                    related_obj_ft_tensor = torch.from_numpy(related_obj_ft).to(
+                        "cuda"
+                    )
                     sim = F.cosine_similarity(
                         text_query_ft.unsqueeze(0),
                         related_obj_ft_tensor.unsqueeze(0),
@@ -809,7 +870,9 @@ class GlobalMapManager(BaseMapManager):
             for obj in self.global_map:
                 if obj.uid in self.ignore_global_obj_list:
                     continue
-                obj_name = self.visualizer.obj_classes.get_classes_arr()[obj.class_id]
+                obj_name = self.visualizer.obj_classes.get_classes_arr()[
+                    obj.class_id
+                ]
                 if obj_name == self.best_candidate_name:
                     obj_list.append(obj)
 

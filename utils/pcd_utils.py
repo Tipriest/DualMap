@@ -95,7 +95,8 @@ def mask_depth_to_points(
         # 为每个 mask 生成一个随机 RGB 颜色，范围 [0,1]
         # random_colors: (N, 3)，每一行是一个对象的 RGB 颜色
         random_colors = (
-            torch.randint(0, 256, (N, 3), device=device, dtype=torch.float32) / 255.0
+            torch.randint(0, 256, (N, 3), device=device, dtype=torch.float32)
+            / 255.0
         )  # RGB colors in [0, 1]
         # Expand dims to match (N, H, W, 3) and apply to valid points
 
@@ -106,7 +107,7 @@ def mask_depth_to_points(
             -1, H, W, -1
         ) * valid.unsqueeze(-1)
         # 再乘以 valid，将无效点的颜色置为 0
-        
+
     # 返回每个 mask 对应的点云和颜色
     return points, colors
 
@@ -149,8 +150,12 @@ def init_pcd_denoise_dbscan(
 
         # Create a new PointCloud object
         largest_cluster_pcd = o3d.geometry.PointCloud()
-        largest_cluster_pcd.points = o3d.utility.Vector3dVector(largest_cluster_points)
-        largest_cluster_pcd.colors = o3d.utility.Vector3dVector(largest_cluster_colors)
+        largest_cluster_pcd.points = o3d.utility.Vector3dVector(
+            largest_cluster_points
+        )
+        largest_cluster_pcd.colors = o3d.utility.Vector3dVector(
+            largest_cluster_colors
+        )
 
         pcd = largest_cluster_pcd
 
@@ -179,7 +184,9 @@ def refine_points_with_clustering(points, colors, eps=0.05, min_points=10):
     if points_np.shape[0] == 0:
         # print("No points found in the input point cloud.")
         # FIXED: [KDTreeFlann::SetRawData] Failed due to no data warning
-        return np.empty((0, 3), dtype=np.float32), np.empty((0, 3), dtype=np.float32)
+        return np.empty((0, 3), dtype=np.float32), np.empty(
+            (0, 3), dtype=np.float32
+        )
 
     # Create Open3D point cloud object
     pcd = o3d.geometry.PointCloud()
@@ -205,7 +212,9 @@ def refine_points_with_clustering(points, colors, eps=0.05, min_points=10):
     # Check if there are still clusters
     if len(unique_labels) == 0:
         # print("No valid clusters found after removing noise.")
-        return np.empty((0, 3), dtype=np.float32), np.empty((0, 3), dtype=np.float32)
+        return np.empty((0, 3), dtype=np.float32), np.empty(
+            (0, 3), dtype=np.float32
+        )
 
     # Find the largest cluster
     max_label = unique_labels[np.argmax(counts)]

@@ -40,7 +40,9 @@ def setup_logging(log_file_path: str) -> None:
 
 
 @measure_time_block("Evaluation Time")
-@hydra.main(version_base=None, config_path="../config/", config_name="seg_evaluation")
+@hydra.main(
+    version_base=None, config_path="../config/", config_name="seg_evaluation"
+)
 def main(cfg: DictConfig):
 
     # Create saving dir
@@ -55,7 +57,9 @@ def main(cfg: DictConfig):
     log_dir = os.path.join(output_dir, "logfile.log")
     setup_logging(log_dir)
 
-    logging.info(f"################ {cfg.dataset_name}_{cfg.scene_id} ################")
+    logging.info(
+        f"################ {cfg.dataset_name}_{cfg.scene_id} ################"
+    )
     logging.info("This is the application for evaluation of segmentation")
     logging.info(f"Results output path: {output_dir}")
     logging.info(f"Log output path: {log_dir}")
@@ -65,7 +69,9 @@ def main(cfg: DictConfig):
     class_id_names_path = os.path.join(
         cfg.config_path, f"{cfg.dataset_name}_{cfg.scene_id}_id_names.json"
     )
-    logging.info("Loading classes id --> names  from: {}".format(class_id_names_path))
+    logging.info(
+        "Loading classes id --> names  from: {}".format(class_id_names_path)
+    )
 
     if not os.path.exists(class_id_names_path):
         raise FileNotFoundError(f"Error: File not found: {class_id_names_path}")
@@ -79,15 +85,21 @@ def main(cfg: DictConfig):
     class_id_colors_path = os.path.join(
         cfg.config_path, f"{cfg.dataset_name}_{cfg.scene_id}_id_colors.json"
     )
-    logging.info("Loading classes id --> colors from: {}".format(class_id_colors_path))
+    logging.info(
+        "Loading classes id --> colors from: {}".format(class_id_colors_path)
+    )
 
     if not os.path.exists(class_id_colors_path):
-        raise FileNotFoundError(f"Error: File not found: {class_id_colors_path}")
+        raise FileNotFoundError(
+            f"Error: File not found: {class_id_colors_path}"
+        )
 
     class_id_colors = {}
     with open(class_id_colors_path, "r") as file:
         class_id_colors = json.load(file)
-    class_id_colors = {int(key): value for key, value in class_id_colors.items()}
+    class_id_colors = {
+        int(key): value for key, value in class_id_colors.items()
+    }
 
     # if use given classes, load given classes id color
     given_class_id_colors = {}
@@ -281,7 +293,8 @@ def main(cfg: DictConfig):
                 color = class_id_colors[obj.class_id]
                 seg_full_pcd += obj.pcd.paint_uniform_color(color)
             o3d.io.write_point_cloud(
-                os.path.join(output_dir, "pred_seg_clip_pcd_full.pcd"), seg_full_pcd
+                os.path.join(output_dir, "pred_seg_clip_pcd_full.pcd"),
+                seg_full_pcd,
             )
 
         # Object-level evaluation starts here...
@@ -296,7 +309,9 @@ def main(cfg: DictConfig):
         iou_matrix = np.zeros((len(obj_bbox), len(gt_bbox)))
         for i in range(len(obj_bbox)):
             for j in range(len(gt_bbox)):
-                iou_matrix[i, j] = pairwise_iou_calculate(obj_bbox[i], gt_bbox[j])
+                iou_matrix[i, j] = pairwise_iou_calculate(
+                    obj_bbox[i], gt_bbox[j]
+                )
         # Assign the GT label to each object
         obj_idx, gt_idx = linear_sum_assignment(iou_matrix, maximize=True)
 
@@ -319,7 +334,9 @@ def main(cfg: DictConfig):
 
         # Calculate cosine similarity matrix
         # obj_feats and class_names_feats are normalized before
-        sim_mat_assigned = cosine_similarity(obj_feats_assigned, class_names_feats)
+        sim_mat_assigned = cosine_similarity(
+            obj_feats_assigned, class_names_feats
+        )
 
         # Top-k results evaluation
         # Calculate accuracy with different top-k
@@ -364,10 +381,14 @@ def main(cfg: DictConfig):
 
     if cfg.is_debug:
         gt_pred_pcd = o3d.geometry.PointCloud()
-        gt_pred_pcd.points = o3d.utility.Vector3dVector(np.asarray(gt_pcd.points))
+        gt_pred_pcd.points = o3d.utility.Vector3dVector(
+            np.asarray(gt_pcd.points)
+        )
         # get colors based on the class_ids_pred
         gt_pred_pcd.colors = o3d.utility.Vector3dVector(
-            np.array([class_id_colors[idx] for idx in class_ids_pred.reshape(-1)])
+            np.array(
+                [class_id_colors[idx] for idx in class_ids_pred.reshape(-1)]
+            )
         )
         o3d.io.write_point_cloud(
             os.path.join(output_dir, "gt_mapped_pcd_full.pcd"), gt_pred_pcd
@@ -453,7 +474,11 @@ def main(cfg: DictConfig):
 
 
 def get_text_features(
-    cfg: DictConfig, class_names: list, clip_model, clip_tokenizer, batch_size=64
+    cfg: DictConfig,
+    class_names: list,
+    clip_model,
+    clip_tokenizer,
+    batch_size=64,
 ) -> np.ndarray:
 
     multiple_templates = [
@@ -490,7 +515,9 @@ def get_text_features(
         text_id += batch_size
 
     # shrink the output text features into classes names size
-    text_feats = text_feats.reshape((-1, len(multiple_templates), text_feats.shape[-1]))
+    text_feats = text_feats.reshape(
+        (-1, len(multiple_templates), text_feats.shape[-1])
+    )
     text_feats = np.mean(text_feats, axis=1)
 
     # TODO: Should we do normalization? Answer should be YES

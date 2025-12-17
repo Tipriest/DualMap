@@ -4,7 +4,13 @@ from PIL import Image
 
 
 def compute_clip_features(
-    image, detections, clip_model, clip_tokenizer, clip_preprocess, device, classes
+    image,
+    detections,
+    clip_model,
+    clip_tokenizer,
+    clip_preprocess,
+    device,
+    classes,
 ):
     # output 1024 feats
     image = image.astype(np.uint8)
@@ -71,7 +77,13 @@ def compute_clip_features(
 
 
 def compute_clip_features_batched(
-    image, detections, clip_model, clip_tokenizer, clip_preprocess, device, classes
+    image,
+    detections,
+    clip_model,
+    clip_tokenizer,
+    clip_preprocess,
+    device,
+    classes,
 ):
     """
     This function computes CLIP features for a given image and its detections.

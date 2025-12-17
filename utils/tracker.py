@@ -70,9 +70,9 @@ class Tracker:
 
         if self.__is_global:
             # 全局匹配模式:
-                # 使用2D bounding box 的交集比率判断
-                # 适用于全局地图的跨空间匹配
-                # 不考虑视觉特征（因为全局尺度下视觉可能变化大）
+            # 使用2D bounding box 的交集比率判断
+            # 适用于全局地图的跨空间匹配
+            # 不考虑视觉特征（因为全局尺度下视觉可能变化大）
             # for global matching we use geometry only
             # 计算2D BBox的空间相似度
             spatial_sim_mat = self.compute_global_spatial_sim()
@@ -92,7 +92,8 @@ class Tracker:
                 n_components, component_labels = connected_components(graph)
                 # get merge info
                 self.merge_info = [
-                    np.where(component_labels == i)[0] for i in range(n_components)
+                    np.where(component_labels == i)[0]
+                    for i in range(n_components)
                 ]
 
             # Spatial sim torch
@@ -167,8 +168,10 @@ class Tracker:
                 pcd_map = self.ref_map[idx_a].pcd
                 pcd_curr = self.curr_frame[idx_b].pcd
 
-                overlap_matrix[idx_a, idx_b] = self.find_overlapping_ratio_faiss(
-                    pcd_map, pcd_curr, radius=0.02
+                overlap_matrix[idx_a, idx_b] = (
+                    self.find_overlapping_ratio_faiss(
+                        pcd_map, pcd_curr, radius=0.02
+                    )
                 )
 
         return overlap_matrix
@@ -193,7 +196,8 @@ class Tracker:
             idx.add(points_arr)
 
         points_curr = [
-            np.asarray(obs.pcd.points, dtype=np.float32) for obs in self.curr_frame
+            np.asarray(obs.pcd.points, dtype=np.float32)
+            for obs in self.curr_frame
         ]
 
         # Get stacked bboxes for iou calculation
@@ -258,7 +262,9 @@ class Tracker:
             min_bound = obj.bbox_2d.get_min_bound()
             max_bound = obj.bbox_2d.get_max_bound()
             map_bbox_values.append(
-                torch.tensor([min_bound[0], min_bound[1], max_bound[0], max_bound[1]])
+                torch.tensor(
+                    [min_bound[0], min_bound[1], max_bound[0], max_bound[1]]
+                )
             )
         map_bbox_torch = torch.stack(map_bbox_values, dim=0)
 
@@ -268,7 +274,9 @@ class Tracker:
             min_bound = obs.bbox_2d.get_min_bound()
             max_bound = obs.bbox_2d.get_max_bound()
             curr_bbox_values.append(
-                torch.tensor([min_bound[0], min_bound[1], max_bound[0], max_bound[1]])
+                torch.tensor(
+                    [min_bound[0], min_bound[1], max_bound[0], max_bound[1]]
+                )
             )
         curr_bbox_torch = torch.stack(curr_bbox_values, dim=0)
 
@@ -326,8 +334,12 @@ class Tracker:
         inter_area = inter_width * inter_height
 
         # Calculate the area of each bounding box
-        bboxes1_area = (bboxes1_max_x - bboxes1_min_x) * (bboxes1_max_y - bboxes1_min_y)
-        bboxes2_area = (bboxes2_max_x - bboxes2_min_x) * (bboxes2_max_y - bboxes2_min_y)
+        bboxes1_area = (bboxes1_max_x - bboxes1_min_x) * (
+            bboxes1_max_y - bboxes1_min_y
+        )
+        bboxes2_area = (bboxes2_max_x - bboxes2_min_x) * (
+            bboxes2_max_y - bboxes2_min_y
+        )
 
         # Calculate the ratio of intersection area to each bounding box's area
         ratio1 = inter_area / bboxes1_area[:, None]  # ratio for bboxes1
@@ -410,7 +422,9 @@ class Tracker:
                     f"[Tracker][Global] obs_idx: {obs_idx}, map_idx: {map_idx}, max_sim_value: {max_sim_value}  "
                 )
 
-                self.curr_frame[obs_idx].matched_obj_uid = self.ref_map[map_idx].uid
+                self.curr_frame[obs_idx].matched_obj_uid = self.ref_map[
+                    map_idx
+                ].uid
                 self.curr_frame[obs_idx].matched_obj_score = sim_mat[obs_idx][
                     map_idx
                 ].item()
@@ -528,5 +542,7 @@ class Tracker:
         )  # Shape (M, N)
 
         # Compute IoU
-        iou = intersection_volume / (volume1[:, None] + volume2 - intersection_volume)
+        iou = intersection_volume / (
+            volume1[:, None] + volume2 - intersection_volume
+        )
         return iou.cpu()

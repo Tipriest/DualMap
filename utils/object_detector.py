@@ -1,6 +1,7 @@
 import gzip
 import logging
 import os
+
 # import pdb
 import shutil
 import pickle
@@ -34,6 +35,7 @@ from utils.visualizer import ReRunVisualizer, visualize_result_rgb
 # Set up the module-level logger
 # 设置模块级日志记录器
 logger = logging.getLogger(__name__)
+
 
 class PoseLowPassFilter:
     """姿态低通滤波器，用于平滑相机位姿。"""
@@ -73,6 +75,7 @@ class PoseLowPassFilter:
         T_smooth[:3, 3] = self.smoothed_translation
         return T_smooth
 
+
 class Detector:
     # Given input output detection
     """
@@ -98,7 +101,9 @@ class Detector:
         classes_path = cfg.yolo.classes_path
         if cfg.yolo.use_given_classes:
             classes_path = cfg.yolo.given_classes_path
-            logger.info(f"[Detector][Init] Using given classes, path:{classes_path}")
+            logger.info(
+                f"[Detector][Init] Using given classes, path:{classes_path}"
+            )
 
         self.obj_classes = ObjectClasses(
             classes_file_path=classes_path,
@@ -142,9 +147,7 @@ class Detector:
         self.layout_num = 0
         self.layout_time = 0.0
         # For thread processing(用于线程处理)
-        self.layout_lock = (
-            threading.Lock()
-        )  # 用于保护layout_pointcloud的线程锁
+        self.layout_lock = threading.Lock()  # 用于保护layout_pointcloud的线程锁
         self.data_thread = None  # 线程句柄
         self.data_event = threading.Event()  # 线程通知事件
 
@@ -168,11 +171,15 @@ class Detector:
                 # Only reparameterize if the model is MobileCLIP
                 # 仅当模型为MobileCLIP时才重新参数化
                 if "MobileCLIP" in cfg.clip.model_name:
-                    from mobileclip.modules.common.mobileone import reparameterize_model
+                    from mobileclip.modules.common.mobileone import (
+                        reparameterize_model,
+                    )
 
                     self.clip_model = reparameterize_model(self.clip_model)
 
-                self.clip_tokenizer = open_clip.get_tokenizer(cfg.clip.model_name)
+                self.clip_tokenizer = open_clip.get_tokenizer(
+                    cfg.clip.model_name
+                )
             except Exception as e:
                 logger.error(f"[Detector][Init] Error loading CLIP model: {e}")
                 return
@@ -182,7 +189,7 @@ class Detector:
                 logger.info(
                     f"[Detector][Init] Loading YOLO model from\t{cfg.yolo.model_path}"
                 )
-                self.yolo:YOLO = YOLO(cfg.yolo.model_path)
+                self.yolo: YOLO = YOLO(cfg.yolo.model_path)
                 self.yolo.set_classes(self.obj_classes.get_classes_arr())
             except Exception as e:
                 logger.error(f"[Detector][Init] Error loading YOLO model: {e}")
@@ -206,14 +213,22 @@ class Detector:
                     )
                     self.fastsam = FastSAM(cfg.fastsam.model_path)
                 except Exception as e:
-                    logger.error(f"[Detector][Init] Error loading FASTSAM model: {e}")
+                    logger.error(
+                        f"[Detector][Init] Error loading FASTSAM model: {e}"
+                    )
                     return
 
-            logger.info("[Detector][Init] Initializing high-low mobility classifier.初始化固定/易移动的物体分类器")
+            logger.info(
+                "[Detector][Init] Initializing high-low mobility classifier.初始化固定/易移动的物体分类器"
+            )
             lm_examples = cfg.lm_examples
             hm_examples = cfg.hm_examples
             lm_descriptions = cfg.lm_descriptions
-            num_examples = [len(lm_examples), len(hm_examples), len(lm_descriptions)]
+            num_examples = [
+                len(lm_examples),
+                len(hm_examples),
+                len(lm_descriptions),
+            ]
             prototypes = lm_examples + hm_examples + lm_descriptions
             proto_feats = get_text_features(
                 prototypes,
@@ -265,7 +280,9 @@ class Detector:
                 self.data_thread.join()
 
             # Create a new thread to process data input(创建一个新线程来处理数据输入)
-            self.data_thread = threading.Thread(target=self._process_data_input_thread)
+            self.data_thread = threading.Thread(
+                target=self._process_data_input_thread
+            )
             self.data_thread.start()
 
     def _process_data_input_thread(self):
@@ -287,7 +304,9 @@ class Detector:
             return
 
         # Print current frame index
-        logger.info(f"[Detector][Layout] Processing frame idx: {self.curr_data.idx}")
+        logger.info(
+            f"[Detector][Layout] Processing frame idx: {self.curr_data.idx}"
+        )
 
         # Check if layout_pointcloud needs to be updated
         if self.check_keyframe_for_layout_pcd():
@@ -302,8 +321,10 @@ class Detector:
                 logger.info(
                     f"[Detector][Layout] Points before downsample: {len(self.layout_pointcloud.points)}"
                 )
-                self.layout_pointcloud = self.layout_pointcloud.voxel_down_sample(
-                    voxel_size=self.cfg.layout_voxel_size
+                self.layout_pointcloud = (
+                    self.layout_pointcloud.voxel_down_sample(
+                        voxel_size=self.cfg.layout_voxel_size
+                    )
                 )
                 logger.info(
                     f"[Detector][Layout] Points after downsample: {len(self.layout_pointcloud.points)}"
@@ -311,7 +332,9 @@ class Detector:
 
             # Update prev_keyframe_data
             self.prev_keyframe_data = self.curr_data.copy()
-            logger.info("[Detector][Layout] Updated layout pointcloud.(已更新布局点云)")
+            logger.info(
+                "[Detector][Layout] Updated layout pointcloud.(已更新布局点云)"
+            )
 
             # Update time and count(更新时间和计数)
             end_time = time.time()
@@ -354,12 +377,16 @@ class Detector:
             map_save_path = self.cfg.map_save_path
             if os.path.exists(map_save_path):
                 shutil.rmtree(map_save_path)
-                logger.info(f"[Detector] Cleared the directory: {map_save_path}")
+                logger.info(
+                    f"[Detector] Cleared the directory: {map_save_path}"
+                )
             os.makedirs(map_save_path)
 
             layout_pcd_path = os.path.join(map_save_path, "layout.pcd")
             o3d.io.write_point_cloud(layout_pcd_path, layout_pcd)
-            logger.info(f"[Detector][Layout] Saving layout to: {layout_pcd_path}")
+            logger.info(
+                f"[Detector][Layout] Saving layout to: {layout_pcd_path}"
+            )
 
     def load_layout(self):
         """
@@ -461,9 +488,7 @@ class Detector:
             masks_tensor = results[0].masks.data
             masks_np = masks_tensor.cpu().numpy().astype(bool)
         else:
-            logging.warning(
-                "[Detector] fastSAM未返回任何掩码, 使用空掩码数组"
-            )
+            logging.warning("[Detector] fastSAM未返回任何掩码, 使用空掩码数组")
             # If no mask is returned, create an empty array.
             # 假设掩码大小与输入图像的前两个维度匹配
             masks_np = np.empty((0,) + color.shape[:2], dtype=bool)
@@ -471,7 +496,9 @@ class Detector:
         # Extract class IDs (default all set to unknown_class_id)
         # 提取类别ID(默认全部设置为unknown_class_id)
         detection_class_id_tensor = results[0].boxes.cls
-        detection_class_id_np = detection_class_id_tensor.cpu().numpy().astype(int)
+        detection_class_id_np = (
+            detection_class_id_tensor.cpu().numpy().astype(int)
+        )
         detection_class_id_np = np.full_like(
             detection_class_id_np, self.unknown_class_id
         )
@@ -489,7 +516,9 @@ class Detector:
             return detections1
 
         # 合并xyxy
-        merged_xyxy = np.concatenate([detections1.xyxy, detections2.xyxy], axis=0)
+        merged_xyxy = np.concatenate(
+            [detections1.xyxy, detections2.xyxy], axis=0
+        )
 
         # Merge confidence(合并置信度)
         merged_confidence = np.concatenate(
@@ -502,7 +531,9 @@ class Detector:
         )
 
         # Merge mask(合并掩码)
-        merged_masks = np.concatenate([detections1.mask, detections2.mask], axis=0)
+        merged_masks = np.concatenate(
+            [detections1.mask, detections2.mask], axis=0
+        )
 
         # Create new sv.Detections object(创建新的sv.Detections对象)
         merged_detections = sv.Detections(
@@ -551,8 +582,8 @@ class Detector:
             color (_type_): _description_
         """
         with timing_context("YOLO", self):
-            confidence, class_id, class_labels, xyxy = self.process_yolo_results(
-                color, self.obj_classes
+            confidence, class_id, class_labels, xyxy = (
+                self.process_yolo_results(color, self.obj_classes)
             )
 
         # if detection is empty, return(如果检测为空，则返回)
@@ -599,7 +630,9 @@ class Detector:
 
         # Extract class IDs(提取类别ID)
         detection_class_id_tensor = results[0].boxes.cls
-        detection_class_id_np = detection_class_id_tensor.cpu().numpy().astype(int)
+        detection_class_id_np = (
+            detection_class_id_tensor.cpu().numpy().astype(int)
+        )
 
         # Generate class labels(生成类别标签)
         detection_class_labels = [
@@ -611,10 +644,19 @@ class Detector:
         xyxy_tensor = results[0].boxes.xyxy
         xyxy_np = xyxy_tensor.cpu().numpy()
 
-        return confidence_np, detection_class_id_np, detection_class_labels, xyxy_np
+        return (
+            confidence_np,
+            detection_class_id_np,
+            detection_class_labels,
+            xyxy_np,
+        )
 
     def filter_fs_detections_by_curr(
-        self, fs_detections, curr_detections, iou_threshold=0.5, overlap_threshold=0.6
+        self,
+        fs_detections,
+        curr_detections,
+        iou_threshold=0.5,
+        overlap_threshold=0.6,
     ):
         """根据与当前检测的重叠来过滤FastSAM的检测结果。"""
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -644,12 +686,18 @@ class Detector:
 
         # Flatten masks to (N, H * W) and convert to float32 for matrix multiplication
         # 将掩码展平为 (N, H * W) 并转换为float32以进行矩阵乘法
-        fs_masks_flat = fs_masks.view(num_fs, -1).to(torch.float32)  # (N1, H * W)
-        curr_masks_flat = curr_masks.view(num_curr, -1).to(torch.float32)  # (N2, H * W)
+        fs_masks_flat = fs_masks.view(num_fs, -1).to(
+            torch.float32
+        )  # (N1, H * W)
+        curr_masks_flat = curr_masks.view(num_curr, -1).to(
+            torch.float32
+        )  # (N2, H * W)
 
         # Compute intersection and union (using float operations)
         # 计算交集和并集（使用浮点运算）
-        intersection = torch.matmul(fs_masks_flat, curr_masks_flat.T)  # (N1, N2)
+        intersection = torch.matmul(
+            fs_masks_flat, curr_masks_flat.T
+        )  # (N1, N2)
         fs_area = fs_masks_flat.sum(dim=1, keepdim=True)  # (N1, 1)
         curr_area = curr_masks_flat.sum(dim=1).unsqueeze(0)  # (1, N2)
         union = fs_area + curr_area - intersection  # (N1, N2)
@@ -660,8 +708,12 @@ class Detector:
 
         # Compute overlap ratio
         # 计算重叠率
-        overlap_ratio_fs = intersection / torch.clamp(fs_area, min=1e-7)  # (N1, N2)
-        overlap_ratio_curr = intersection / torch.clamp(curr_area, min=1e-7)  # (N1, N2)
+        overlap_ratio_fs = intersection / torch.clamp(
+            fs_area, min=1e-7
+        )  # (N1, N2)
+        overlap_ratio_curr = intersection / torch.clamp(
+            curr_area, min=1e-7
+        )  # (N1, N2)
 
         # Initialize keep mask, default is to keep all fs_masks
         # 初始化保留掩码，默认为保留所有fs_masks
@@ -718,7 +770,7 @@ class Detector:
 
     def get_detections(self):
         """处理所有检测, 包括YOLO, SAM, FastSAM, 和 CLIP
-            获得self.curr_results
+        获得self.curr_results
         """
 
         color = self.curr_data.color.astype(np.uint8)
@@ -744,9 +796,7 @@ class Detector:
             filtered_detections = self.filter.run_filter()
 
         if self.filter.get_len() == 0:
-            logger.warning(
-                "[Detector] 过滤后当前帧中没有有效的检测结果。"
-            )
+            logger.warning("[Detector] 过滤后当前帧中没有有效的检测结果。")
             self.curr_results = {}
             return
 
@@ -761,7 +811,8 @@ class Detector:
 
         with timing_context("CLIP+Create Object Pointcloud", self):
             cluster_thread = threading.Thread(
-                target=self.process_masks_thread, args=(filtered_detections.mask,)
+                target=self.process_masks_thread,
+                args=(filtered_detections.mask,),
             )
             cluster_thread.start()
 
@@ -794,7 +845,9 @@ class Detector:
         if self.cfg.visualize_detection:
             with timing_context("Visualize Detection", self):
                 annotated_image, _ = visualize_result_rgb(
-                    color, filtered_detections, self.obj_classes.get_classes_arr()
+                    color,
+                    filtered_detections,
+                    self.obj_classes.get_classes_arr(),
                 )
                 self.annotated_image = annotated_image
 
@@ -827,10 +880,14 @@ class Detector:
             )
             masks_tensor = torch.from_numpy(masks).to(self.cfg.device).float()
             intrinsic_tensor = (
-                torch.from_numpy(self.curr_data.intrinsics).to(self.cfg.device).float()
+                torch.from_numpy(self.curr_data.intrinsics)
+                .to(self.cfg.device)
+                .float()
             )
             image_rgb_tensor = (
-                torch.from_numpy(self.curr_data.color).to(self.cfg.device).float()
+                torch.from_numpy(self.curr_data.color)
+                .to(self.cfg.device)
+                .float()
                 / 255.0
             )
 
@@ -938,9 +995,7 @@ class Detector:
         - point_cloud: 世界坐标系中的点云, 作为Open3D PointCloud对象
         """
         # Extract necessary data from curr_data(从curr_data中提取必要数据)
-        depth = self.curr_data.depth.squeeze(
-            -1
-        )
+        depth = self.curr_data.depth.squeeze(-1)
         # Remove the last dimension if depth is (H, W, 1)
         # 如果深度是(H, W, 1)，则移除最后一个维度
         intrinsics = self.curr_data.intrinsics
@@ -948,9 +1003,7 @@ class Detector:
 
         # Mask out invalid depth values (e.g., depth = 0 or NaN)
         # 屏蔽无效深度值（例如，深度=0或NaN）
-        valid_mask = (depth > 0) & (
-            depth != np.inf
-        )
+        valid_mask = (depth > 0) & (depth != np.inf)
         # Create a mask for valid depth values
         # 创建有效深度值的掩码
         depth = depth[valid_mask]  # Only keep valid depth values
@@ -1031,7 +1084,9 @@ class Detector:
 
         # save annotated images(保存带注释的图像)
         output_file_path = (
-            self.detection_path / "vis" / (self.curr_data.color_name + "_annotated.jpg")
+            self.detection_path
+            / "vis"
+            / (self.curr_data.color_name + "_annotated.jpg")
         )
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1123,7 +1178,10 @@ class Detector:
                 z = bbox.get_center()[2]
 
                 # check z is close to ceiling_height(检查z是否接近天花板高度)
-                if abs(z - self.cfg.ceiling_height) < self.cfg.ceiling_threshold:  # 0.1
+                if (
+                    abs(z - self.cfg.ceiling_height)
+                    < self.cfg.ceiling_threshold
+                ):  # 0.1
                     # If z close ceiling_height， skip this observation
                     # 如果z接近天花板高度，跳过此观测
                     continue
@@ -1176,7 +1234,9 @@ class Detector:
                 # 根据xyxy裁剪图像
                 x1, y1, x2, y2 = map(int, curr_obs.xyxy)
                 _cropped_image = whole_image[y1:y2, x1:x2]
-                cropped_mask = curr_obs.mask[y1:y2, x1:x2].astype(np.uint8) * 255
+                cropped_mask = (
+                    curr_obs.mask[y1:y2, x1:x2].astype(np.uint8) * 255
+                )
 
                 masked_image = cv2.bitwise_and(
                     _cropped_image, _cropped_image, mask=cropped_mask
@@ -1213,11 +1273,15 @@ class Detector:
         elapsed_time,
     ) -> None:
         """可视化时间"""
-        logger.info(f"[Detector][Visualize] Elapsed time: {elapsed_time:.4f} seconds")
+        logger.info(
+            f"[Detector][Visualize] Elapsed time: {elapsed_time:.4f} seconds"
+        )
         self.visualizer.log(
             "plot_time/frame_elapsed_time",
             self.visualizer.Scalar(elapsed_time),
-            self.visualizer.SeriesLine(width=2.5, color=[255, 0, 0]),  # Red color
+            self.visualizer.SeriesLine(
+                width=2.5, color=[255, 0, 0]
+            ),  # Red color
         )
 
     def visualize_memory(
@@ -1225,11 +1289,15 @@ class Detector:
         memory_usage,
     ) -> None:
         """可视化内存使用情况。"""
-        logger.info(f"[Detector][Visualize] Memory usage: {memory_usage:.2f} MB")
+        logger.info(
+            f"[Detector][Visualize] Memory usage: {memory_usage:.2f} MB"
+        )
         self.visualizer.log(
             "plot_memory/memory_usage",
             self.visualizer.Scalar(memory_usage),
-            self.visualizer.SeriesLine(width=2.5, color=[0, 255, 0]),  # Green color
+            self.visualizer.SeriesLine(
+                width=2.5, color=[0, 255, 0]
+            ),  # Green color
         )
 
     def visualize_detection(
@@ -1291,7 +1359,9 @@ class Detector:
             "world/camera",
             self.visualizer.Transform3D(
                 translation=translation,
-                rotation=self.visualizer.RotationAxisAngle(axis=axis, angle=angle),
+                rotation=self.visualizer.RotationAxisAngle(
+                    axis=axis, angle=angle
+                ),
                 from_parent=False,
             ),
         )
@@ -1313,11 +1383,15 @@ class Detector:
         r = [w, h]
         self.visualizer.log(
             "world/follower_camera",
-            self.visualizer.Pinhole(resolution=r, focal_length=f, principal_point=p),
+            self.visualizer.Pinhole(
+                resolution=r, focal_length=f, principal_point=p
+            ),
         )
         self.visualizer.log(
             "world/follower_camera_2",
-            self.visualizer.Pinhole(resolution=r, focal_length=f, principal_point=p),
+            self.visualizer.Pinhole(
+                resolution=r, focal_length=f, principal_point=p
+            ),
         )
 
         pose_current = self.curr_data.pose
@@ -1328,12 +1402,16 @@ class Detector:
 
         translation = pose_new[:3, 3].tolist()
         # change the rotation mat to axis-angle(将旋转矩阵转换为轴角)
-        axis, angle = self.visualizer.rotation_matrix_to_axis_angle(pose_new[:3, :3])
+        axis, angle = self.visualizer.rotation_matrix_to_axis_angle(
+            pose_new[:3, :3]
+        )
         self.visualizer.log(
             "world/follower_camera",
             self.visualizer.Transform3D(
                 translation=translation,
-                rotation=self.visualizer.RotationAxisAngle(axis=axis, angle=angle),
+                rotation=self.visualizer.RotationAxisAngle(
+                    axis=axis, angle=angle
+                ),
                 from_parent=False,
             ),
         )
@@ -1341,13 +1419,17 @@ class Detector:
         # Using for visualization(用于可视化)
         pose_smooth = self.pose_filter_follower.update(pose_new_2)
         translation = pose_smooth[:3, 3].tolist()
-        axis, angle = self.visualizer.rotation_matrix_to_axis_angle(pose_smooth[:3, :3])
+        axis, angle = self.visualizer.rotation_matrix_to_axis_angle(
+            pose_smooth[:3, :3]
+        )
 
         self.visualizer.log(
             "world/follower_camera_2",
             self.visualizer.Transform3D(
                 translation=translation,
-                rotation=self.visualizer.RotationAxisAngle(axis=axis, angle=angle),
+                rotation=self.visualizer.RotationAxisAngle(
+                    axis=axis, angle=angle
+                ),
                 from_parent=False,
             ),
         )
@@ -1379,11 +1461,15 @@ class Detector:
         """创建从相机2到相机1的变换矩阵。"""
         # 定义平移向量：相机2相对于相机1的平移
         # Define translation vector: translation of camera 2 relative to camera 1
-        translation = np.array(self.cfg.follower_translation)  # Up 0.2m, back -0.2m
+        translation = np.array(
+            self.cfg.follower_translation
+        )  # Up 0.2m, back -0.2m
 
         # Rotation angles in degrees(旋转角度/度)
         angle_roll = self.cfg.follower_roll  # Rotation around X axis(绕x轴旋转)
-        angle_pitch = self.cfg.follower_pitch  # Rotation around Y axis(绕y轴旋转)
+        angle_pitch = (
+            self.cfg.follower_pitch
+        )  # Rotation around Y axis(绕y轴旋转)
         angle_yaw = self.cfg.follower_yaw  # Rotation around Z axis(绕z轴旋转)
 
         # Convert angles to radians(将角度转换为弧度)
@@ -1423,7 +1509,9 @@ class Detector:
 
         # 创建4x4变换矩阵
         transform = np.eye(4)
-        transform[:3, :3] = rotation_matrix  # Fill rotation matrix(填充旋转矩阵)
+        transform[:3, :3] = (
+            rotation_matrix  # Fill rotation matrix(填充旋转矩阵)
+        )
         transform[:3, 3] = translation  # Fill translation vector(创建平移向量)
 
         return transform
@@ -1432,7 +1520,9 @@ class Detector:
         """创建从相机2到相机1的第二个变换矩阵。"""
         # 定义平移向量：相机2相对于相机1的平移
         # Define translation vector: translation of camera 2 relative to camera 1
-        translation = np.array(self.cfg.follower_translation2)  # Up 0.2m, back -0.2m
+        translation = np.array(
+            self.cfg.follower_translation2
+        )  # Up 0.2m, back -0.2m
 
         # Rotation angles in degrees(旋转角度/度)
         angle_roll = self.cfg.follower_roll2  # Rotation around X axis
@@ -1490,9 +1580,15 @@ class Detector:
 
         sim_lm = np.max(sim[: self.num_examples[0]])
         sim_hm = np.max(
-            sim[self.num_examples[0] : (self.num_examples[0] + self.num_examples[1])]
+            sim[
+                self.num_examples[0] : (
+                    self.num_examples[0] + self.num_examples[1]
+                )
+            ]
         )
-        sim_lm_des = np.max(sim[(self.num_examples[0] + self.num_examples[1]):])
+        sim_lm_des = np.max(
+            sim[(self.num_examples[0] + self.num_examples[1]) :]
+        )
 
         # for debugging only
         # lm_idx = np.argmax(sim[:self.num_examples[0]])
@@ -1519,7 +1615,9 @@ class Detector:
         bbox_center = np.array(bbox.get_center())
 
         # Get the translation part of the pose (assuming it's a 4x4 matrix)
-        pose_translation = np.array(pose[:3, 3])  # Extract translation (x, y, z)
+        pose_translation = np.array(
+            pose[:3, 3]
+        )  # Extract translation (x, y, z)
 
         # Calculate the Euclidean distance between the pose translation and the bbox center
         distance = np.linalg.norm(bbox_center - pose_translation)
@@ -1596,7 +1694,9 @@ class Detector:
 
         # Convert lists to batches
         # 将列表转换为批次
-        preprocessed_images_batch = torch.cat(preprocessed_images, dim=0).to(device)
+        preprocessed_images_batch = torch.cat(preprocessed_images, dim=0).to(
+            device
+        )
         text_tokens_batch = clip_tokenizer(text_tokens).to(device)
 
         # Perform batch inference
@@ -1630,9 +1730,7 @@ class Detector:
                     count += 1
                     # Modify the text_feats for the unknown class
                     # 修改未知类别的文本特征
-                    text_feats[idx] = (
-                        self.class_feats_mean
-                    )
+                    text_feats[idx] = self.class_feats_mean
                     # You can modify how you update the text_feats here
                     # 你可以在这里修改如何更新文本特征
                     # random_feats = np.random.rand(*self.class_feats_mean.shape)
@@ -1659,6 +1757,7 @@ class Detector:
         # 返回裁剪的图像、图像特征和文本特征
         # Return the cropped images, image features, and text features
         return image_crops, image_feats, text_feats
+
 
 class Filter:
     """用于过滤检测结果的类。"""
@@ -1746,9 +1845,7 @@ class Filter:
         self.set_detections(keep)
 
         if self.get_len() == 0:
-            logger.warning(
-                "[Detector][Filter] 过滤后，没有检测结果剩下..."
-            )
+            logger.warning("[Detector][Filter] 过滤后，没有检测结果剩下...")
             return None
         logger.info(
             f"[Detector][Filter] 从 {original_num} 个中过滤出 {self.get_len()} 个"
@@ -1787,7 +1884,13 @@ class Filter:
             )
             return
 
-        self.confidence, self.class_id, self.xyxy, self.masks, self.masks_size = (
+        (
+            self.confidence,
+            self.class_id,
+            self.xyxy,
+            self.masks,
+            self.masks_size,
+        ) = (
             self.confidence[keep],
             self.class_id[keep],
             self.xyxy[keep],
@@ -1822,7 +1925,9 @@ class Filter:
                 continue
             for j in range(i + 1, N):
                 if iou_matrix[i, j] > self.iou_th:
-                    if ((masks_size[i] > masks_size[j]) and self.keep_larger) or (
+                    if (
+                        (masks_size[i] > masks_size[j]) and self.keep_larger
+                    ) or (
                         (masks_size[i] < masks_size[j]) and not self.keep_larger
                     ):
                         keep[j] = False
@@ -1880,10 +1985,17 @@ class Filter:
                     )
 
                     if from_same_dis:
-                        class_i = self.classes.get_classes_arr()[self.class_id[i]]
-                        class_j = self.classes.get_classes_arr()[self.class_id[j]]
-                        if ((masks_size[i] > masks_size[j]) and self.keep_larger) or (
-                            (masks_size[i] < masks_size[j]) and not self.keep_larger
+                        class_i = self.classes.get_classes_arr()[
+                            self.class_id[i]
+                        ]
+                        class_j = self.classes.get_classes_arr()[
+                            self.class_id[j]
+                        ]
+                        if (
+                            (masks_size[i] > masks_size[j]) and self.keep_larger
+                        ) or (
+                            (masks_size[i] < masks_size[j])
+                            and not self.keep_larger
                         ):
                             keep[j] = False
                             self.merge_detections(j, i)
@@ -1931,7 +2043,10 @@ class Filter:
         keep = np.ones(N, dtype=bool)
 
         for idx, class_id in enumerate(self.class_id):
-            if self.classes.get_classes_arr()[class_id] in self.classes.bg_classes:
+            if (
+                self.classes.get_classes_arr()[class_id]
+                in self.classes.bg_classes
+            ):
                 logger.info(
                     f"[Detector][Filter] Removing {self.classes.get_classes_arr()[class_id]} because it is a background class."
                 )
@@ -1950,10 +2065,12 @@ class Filter:
         x2 = max(x_i2, x_j2)
         self.xyxy[target, :] = x1, y1, x2, y2
 
+
 def update_bbox(mask):
     """根据掩码更新边界框。"""
     y, x = np.nonzero(mask)
     return np.min(x), np.min(y), np.max(x), np.max(y)
+
 
 def if_same_distribution(img1, img2, mask1, mask2, sim_threshold):
     """检查两个掩码区域的颜色分布是否相似。"""
@@ -1990,8 +2107,14 @@ def if_same_distribution(img1, img2, mask1, mask2, sim_threshold):
 
     return cos_sim > sim_threshold
 
+
 def get_text_features(
-    class_names: list, clip_model, clip_tokenizer, device, clip_length, batch_size=64
+    class_names: list,
+    clip_model,
+    clip_tokenizer,
+    device,
+    clip_length,
+    batch_size=64,
 ) -> np.ndarray:
 
     multiple_templates = [
@@ -2007,7 +2130,9 @@ def get_text_features(
     # Get tokens
     text_tokens = clip_tokenizer(class_name_prompts).to(device)
     # Get Output features
-    text_feats = np.zeros((len(class_name_prompts), clip_length), dtype=np.float32)
+    text_feats = np.zeros(
+        (len(class_name_prompts), clip_length), dtype=np.float32
+    )
     # Get the text feature batch by batch
     text_id = 0
     while text_id < len(class_name_prompts):
@@ -2026,7 +2151,9 @@ def get_text_features(
         text_id += batch_size
 
     # shrink the output text features into classes names size
-    text_feats = text_feats.reshape((-1, len(multiple_templates), text_feats.shape[-1]))
+    text_feats = text_feats.reshape(
+        (-1, len(multiple_templates), text_feats.shape[-1])
+    )
     text_feats = np.mean(text_feats, axis=1)
 
     # TODO: Should we do normalization? Answer should be YES
@@ -2034,6 +2161,7 @@ def get_text_features(
     text_feats /= norms
 
     return text_feats
+
 
 def save_hilow_debug(bbox_hl_mapping, output_image, frame_idx):
     for item in bbox_hl_mapping:

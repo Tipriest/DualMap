@@ -19,7 +19,7 @@ class ReRunVisualizer:
     # 归属于类，而非对象实例
     # 用于实现单例模式
     _instance = None
-    
+
     def __new__(cls, cfg=None):
         """
         单例模式，只创建一个实例
@@ -30,7 +30,7 @@ class ReRunVisualizer:
             cls._instance._rerun = None
             cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self, cfg=None) -> None:
         """
         Args:
@@ -44,7 +44,9 @@ class ReRunVisualizer:
             classes_path = cfg.yolo.classes_path
             if cfg.yolo.use_given_classes:
                 classes_path = cfg.yolo.given_classes_path
-                logger.info(f"[Visualizar] Using given classes, path:{classes_path}")
+                logger.info(
+                    f"[Visualizar] Using given classes, path:{classes_path}"
+                )
 
             # Object classes
             self.obj_classes = ObjectClasses(
@@ -72,7 +74,9 @@ class ReRunVisualizer:
                 import rerun as rr
 
                 self._rerun = rr
-                logger.info("[Visualizar] rerun is installed. Using rerun for logger.")
+                logger.info(
+                    "[Visualizar] rerun is installed. Using rerun for logger."
+                )
             except ImportError:
                 logger.warning(
                     "[Visualizar] rerun is not installed. Not using rerun for logger."
@@ -96,19 +100,21 @@ class ReRunVisualizer:
                 if not self._use_rerun:
                     logger.info(
                         "[Visualizar] Skipping optional rerun call to '%s'"
-                        "because rerun usage is disabled.", name
+                        "because rerun usage is disabled.",
+                        name,
                     )
                 elif self._rerun is None:
                     logger.info(
                         "[Visualizar] Skipping optional rerun call to '%s'"
-                        " because rerun is not installed.", name
+                        " because rerun is not installed.",
+                        name,
                     )
 
         return method
 
     def fordebug(self):
         self._rerun.set_time_sequence()
-    
+
     def update_intrinsic(self, intrinsic, force=False):
         if self._intrinsic_initialized and not force:
             return
@@ -164,9 +170,21 @@ class ReRunVisualizer:
         w, x, y, z = q[3], q[0], q[1], q[2]
         return np.array(
             [
-                [1 - 2 * y**2 - 2 * z**2, 2 * x * y - 2 * z * w, 2 * x * z + 2 * y * w],
-                [2 * x * y + 2 * z * w, 1 - 2 * x**2 - 2 * z**2, 2 * y * z - 2 * x * w],
-                [2 * x * z - 2 * y * w, 2 * y * z + 2 * x * w, 1 - 2 * x**2 - 2 * y**2],
+                [
+                    1 - 2 * y**2 - 2 * z**2,
+                    2 * x * y - 2 * z * w,
+                    2 * x * z + 2 * y * w,
+                ],
+                [
+                    2 * x * y + 2 * z * w,
+                    1 - 2 * x**2 - 2 * z**2,
+                    2 * y * z - 2 * x * w,
+                ],
+                [
+                    2 * x * z - 2 * y * w,
+                    2 * y * z + 2 * x * w,
+                    1 - 2 * x**2 - 2 * y**2,
+                ],
             ]
         )
 
@@ -185,7 +203,9 @@ class ReRunVisualizer:
         # Compute the angle of rotation
         theta = np.arccos((trace - 1) / 2)
         # Compute the axis of rotation
-        axis = np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]])
+        axis = np.array(
+            [R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]]
+        )
         axis = axis / np.linalg.norm(axis)
         return axis, theta
 
@@ -217,7 +237,9 @@ class ReRunVisualizer:
 
         def sort_corners_xy(corners):
             center = np.mean(corners[:, :2], axis=0)
-            angles = np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0])
+            angles = np.arctan2(
+                corners[:, 1] - center[1], corners[:, 0] - center[0]
+            )
             return corners[np.argsort(angles)]
 
         bottom_sorted = sort_corners_xy(bottom)
@@ -264,7 +286,9 @@ class ReRunVisualizer:
 
         # Draw label
         label_pos = tuple(corners_2d[0])
-        cv2.putText(image, name, label_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        cv2.putText(
+            image, name, label_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1
+        )
 
         return image
 
@@ -320,7 +344,9 @@ def visualize_result_rgb(
         detections = dataclasses.replace(detections)
         detections.class_id = np.arange(len(detections))
 
-    annotated_image = mask_annotator.annotate(scene=image.copy(), detections=detections)
+    annotated_image = mask_annotator.annotate(
+        scene=image.copy(), detections=detections
+    )
 
     if draw_bboxes:
         annotated_image = box_annotator.annotate(
@@ -357,7 +383,14 @@ def show_obs_result(
         color = (0, 255, 255)  # Text color (yellow)
         thickness = 2  # Text thickness
         cv2.putText(
-            annotated_image, text, org, font, font_scale, color, thickness, cv2.LINE_AA
+            annotated_image,
+            text,
+            org,
+            font,
+            font_scale,
+            color,
+            thickness,
+            cv2.LINE_AA,
         )
 
     cv2.imshow(caption, annotated_image)
@@ -382,7 +415,14 @@ def show_det_result(
         color = (0, 255, 255)  # Text color (yellow)
         thickness = 2  # Text thickness
         cv2.putText(
-            annotated_image, text, org, font, font_scale, color, thickness, cv2.LINE_AA
+            annotated_image,
+            text,
+            org,
+            font,
+            font_scale,
+            color,
+            thickness,
+            cv2.LINE_AA,
         )
 
     cv2.imshow(caption, annotated_image)

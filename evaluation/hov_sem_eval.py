@@ -38,7 +38,9 @@ class HOVEvaluator(Evaluator):
             logging.info(f"Error: {self.hov_result_path} does not exist.")
             sys.exit(1)
 
-        logging.info("Loading saved obj results from: {}".format(self.hov_result_path))
+        logging.info(
+            "Loading saved obj results from: {}".format(self.hov_result_path)
+        )
 
         ply_dir = os.path.join(self.hov_result_path, "objects")
         logging.info("Loading saved obj results from: {}".format(ply_dir))
@@ -62,7 +64,9 @@ class HOVEvaluator(Evaluator):
         obj_map = []
         for ply_path in ply_path_list:
             plydata = PlyData.read(os.path.join(ply_dir, ply_path))
-            points = np.vstack([plydata["vertex"][dim] for dim in ("x", "y", "z")]).T
+            points = np.vstack(
+                [plydata["vertex"][dim] for dim in ("x", "y", "z")]
+            ).T
             colors = (
                 np.vstack(
                     [plydata["vertex"][dim] for dim in ("red", "green", "blue")]
@@ -107,15 +111,19 @@ class HOVEvaluator(Evaluator):
                 seg_full_pcd += obj.pcd.paint_uniform_color(color)
 
             o3d.io.write_point_cloud(
-                os.path.join(self.output_dir, "pred_rgb_pcd_full.pcd"), rgb_full_pcd
+                os.path.join(self.output_dir, "pred_rgb_pcd_full.pcd"),
+                rgb_full_pcd,
             )
             o3d.io.write_point_cloud(
-                os.path.join(self.output_dir, "pred_seg_pcd_full.pcd"), seg_full_pcd
+                os.path.join(self.output_dir, "pred_seg_pcd_full.pcd"),
+                seg_full_pcd,
             )
 
 
 @measure_time_block("Evaluation Time")
-@hydra.main(version_base=None, config_path="../config/", config_name="seg_evaluation")
+@hydra.main(
+    version_base=None, config_path="../config/", config_name="seg_evaluation"
+)
 def main(cfg: DictConfig):
     evaluator = HOVEvaluator(cfg)
     dataset_name = evaluator.get_dataset_name()

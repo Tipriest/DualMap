@@ -43,7 +43,7 @@ class BaseObject:
 
         # obs info
         self.observed_num = 0
-        self.observations:List[Observation] = []
+        self.observations: List[Observation] = []
 
         # Spatial primitives
         self.pcd: Optional[o3d.geometry.PointCloud] = o3d.geometry.PointCloud()
@@ -73,19 +73,27 @@ class BaseObject:
         # Prepare the state dictionary for serialization
         state = {
             "uid": self.uid,
-            "pcd_points": np.asarray(self.pcd.points).tolist(),  # Convert to list
-            "pcd_colors": np.asarray(self.pcd.colors).tolist(),  # Convert to list
+            "pcd_points": np.asarray(
+                self.pcd.points
+            ).tolist(),  # Convert to list
+            "pcd_colors": np.asarray(
+                self.pcd.colors
+            ).tolist(),  # Convert to list
             "clip_ft": self.clip_ft.tolist(),
             "class_id": self.class_id,
             "class_name": self.class_name,
             "nav_goal": self.nav_goal,
             "pose": self.pose.tolist() if self.pose is not None else None,
-            "cropped_image": self.cropped_image.tolist()
-            if self.cropped_image is not None
-            else None,
-            "masked_image": self.masked_image.tolist()
-            if self.masked_image is not None
-            else None,
+            "cropped_image": (
+                self.cropped_image.tolist()
+                if self.cropped_image is not None
+                else None
+            ),
+            "masked_image": (
+                self.masked_image.tolist()
+                if self.masked_image is not None
+                else None
+            ),
         }
         return state
 
@@ -121,7 +129,7 @@ class BaseObject:
         )
 
         self.observed_num = 0
-        self.observations:List[Observation] = []
+        self.observations: List[Observation] = []
 
         self.save_path = self._initialize_save_path()
 
@@ -132,7 +140,9 @@ class BaseObject:
         classes_path = config.yolo.classes_path
         if config.yolo.use_given_classes:
             classes_path = config.yolo.given_classes_path
-            logger.info(f"[BaseObject] Using given classes, path:{classes_path}")
+            logger.info(
+                f"[BaseObject] Using given classes, path:{classes_path}"
+            )
 
         with open(classes_path, "r") as file:
             lines = file.readlines()
@@ -178,10 +188,12 @@ class BaseObject:
     #             imageio.imwrite(cropped_image_dir, cropped_image)
     #             imageio.imwrite(masked_image_dir, masked_image)
 
-    def save_obj_to_disk(self, save_sub_path:str):
+    def save_obj_to_disk(self, save_sub_path: str):
         """Save the object to disk using pickle."""
         if self.save_path is None:
-            logger.warning("[BaseObject] save_path is None, skipping save_to_disk")
+            logger.warning(
+                "[BaseObject] save_path is None, skipping save_to_disk"
+            )
             return
 
         with open(self.save_path, "wb") as f:
@@ -207,11 +219,16 @@ class BaseObject:
                 # imageio.imwrite(cropped_image_dir, cropped_image)
                 # imageio.imwrite(masked_image_dir, masked_image)
                 for _i, cropped_image in enumerate(obs.cropped_images):
-                    cropped_image_dir = os.path.join(cropped_save_dir, f"{_i}.png")
+                    cropped_image_dir = os.path.join(
+                        cropped_save_dir, f"{_i}.png"
+                    )
                     imageio.imwrite(cropped_image_dir, cropped_image)
                 for _i, masked_image in enumerate(obs.masked_images):
-                    masked_image_dir = os.path.join(masked_save_dir, f"{_i}.png")
+                    masked_image_dir = os.path.join(
+                        masked_save_dir, f"{_i}.png"
+                    )
                     imageio.imwrite(masked_image_dir, masked_image)
+
     @staticmethod
     def load_from_disk(filename: str):
         """Load the object from disk using pickle."""
@@ -243,7 +260,9 @@ class BaseObject:
 
         # Calculate average points for each voxel
         downsampled_points_2d = np.zeros_like(unique_indices, dtype=np.float64)
-        downsampled_colors = np.zeros((len(unique_indices), 3), dtype=np.float64)
+        downsampled_colors = np.zeros(
+            (len(unique_indices), 3), dtype=np.float64
+        )
 
         # calculate the mean of points in each voxel
         for i in range(len(unique_indices)):
@@ -365,7 +384,9 @@ class LocalObject(BaseObject):
         top_10_indices = np.argsort(self.class_probs[other_indices])[
             -10:
         ]  # Get top 10 classes with highest scores
-        top_10_real_indices = other_indices[top_10_indices]  # Get real class indices
+        top_10_real_indices = other_indices[
+            top_10_indices
+        ]  # Get real class indices
 
         # Distribute remaining confidence evenly among these 3 classes
         for idx in top_10_real_indices:
@@ -390,7 +411,9 @@ class LocalObject(BaseObject):
         alpha = np.exp(-k * distance / max_distance)
 
         # Bayesian update
-        self.class_probs = (1 - alpha) * self.class_probs + alpha * smoothed_probs
+        self.class_probs = (
+            1 - alpha
+        ) * self.class_probs + alpha * smoothed_probs
 
         # Normalize
         self.class_probs /= np.sum(self.class_probs)
@@ -447,8 +470,12 @@ class LocalObject(BaseObject):
         self.update_spatial_stable_info(latest_obs)
 
         # aggregate images from latest observation (fallback to previous if missing)
-        self.cropped_image = getattr(latest_obs, "cropped_image", self.cropped_image)
-        self.masked_image = getattr(latest_obs, "masked_image", self.masked_image)
+        self.cropped_image = getattr(
+            latest_obs, "cropped_image", self.cropped_image
+        )
+        self.masked_image = getattr(
+            latest_obs, "masked_image", self.masked_image
+        )
 
         # Get major class id
         # get class id list
@@ -491,7 +518,9 @@ class LocalObject(BaseObject):
         # Boundary condition check
         if latest_obs is None:
             raise ValueError("latest_obs cannot be None")
-        if not hasattr(latest_obs, "class_id") or not hasattr(latest_obs, "idx"):
+        if not hasattr(latest_obs, "class_id") or not hasattr(
+            latest_obs, "idx"
+        ):
             raise ValueError("latest_obs must have class_id and idx attributes")
 
         # Split dict update
@@ -504,7 +533,8 @@ class LocalObject(BaseObject):
         for class_id, idx_deque in self.split_info.items():
             while (
                 idx_deque
-                and idx_deque[0] <= latest_obs.idx - self._cfg.active_window_size
+                and idx_deque[0]
+                <= latest_obs.idx - self._cfg.active_window_size
             ):
                 idx_deque.popleft()
             # # if empty, delete
@@ -717,7 +747,9 @@ class LocalObject(BaseObject):
         # 2. if the largest label over 1/2 of the observed num, just set as stable
         class_ids = [obs.class_id for obs in self.observations]
         obj_class_id_counter = Counter(class_ids)
-        most_common_class_id, most_common_count = obj_class_id_counter.most_common(1)[0]
+        most_common_class_id, most_common_count = (
+            obj_class_id_counter.most_common(1)[0]
+        )
 
         if most_common_count > self.observed_num / 3:
             self.is_stable = True
@@ -755,7 +787,9 @@ class LocalObject(BaseObject):
         # 3. Change rate check
         if len(self.class_probs_history) >= window_size:
             recent_probs = np.array(self.class_probs_history[-window_size:])
-            change_rate = np.mean(np.abs(recent_probs[1:] - recent_probs[:-1]), axis=0)
+            change_rate = np.mean(
+                np.abs(recent_probs[1:] - recent_probs[:-1]), axis=0
+            )
             self.change_rate = np.max(change_rate)
             if np.max(change_rate) < change_rate_threshold:
                 return True
@@ -784,7 +818,9 @@ class LocalObject(BaseObject):
         peak_index = np.argmax(hist)
 
         # Get the major plane z value
-        major_plane_z = (bin_edges[peak_index] + bin_edges[peak_index + 1]) / 2.0
+        major_plane_z = (
+            bin_edges[peak_index] + bin_edges[peak_index + 1]
+        ) / 2.0
 
         return major_plane_z
 
@@ -794,7 +830,9 @@ class GlobalObject(BaseObject):
         super().__init__()
 
         # Spatial primitives
-        self.pcd_2d: Optional[o3d.geometry.PointCloud] = o3d.geometry.PointCloud()
+        self.pcd_2d: Optional[o3d.geometry.PointCloud] = (
+            o3d.geometry.PointCloud()
+        )
         self.bbox_2d: Optional[o3d.geometry.AxisAlignedBoundingBox] = (
             o3d.geometry.AxisAlignedBoundingBox()
         )
@@ -832,7 +870,9 @@ class GlobalObject(BaseObject):
         ]
 
         # Serialize related_color (class IDs list)
-        state["related_color"] = self.related_color  # assuming it's a list of class IDs
+        state["related_color"] = (
+            self.related_color
+        )  # assuming it's a list of class IDs
 
         return state
 
@@ -841,7 +881,9 @@ class GlobalObject(BaseObject):
         super().__setstate__(state)
 
         # Restore related_objs as np.ndarray
-        self.related_objs = [np.array(arr) for arr in state.get("related_objs", [])]
+        self.related_objs = [
+            np.array(arr) for arr in state.get("related_objs", [])
+        ]
 
         # Restore pcd_2d (points and colors)
         points = np.array(state.get("pcd_2d_points"))

@@ -11,10 +11,14 @@ from omegaconf import DictConfig
 from scipy.ndimage import binary_erosion
 from scipy.spatial import KDTree, Voronoi
 from utils.time_utils import get_timestamped_path
+
 logger = logging.getLogger(__name__)
 
+
 class LayoutMap:
-    def __init__(self, cfg, resolution=0.1, percentile=90, min_area=5, kernel_size=3):
+    def __init__(
+        self, cfg, resolution=0.1, percentile=90, min_area=5, kernel_size=3
+    ):
         """
         Initialize the LayoutMap class.
 
@@ -112,7 +116,10 @@ class LayoutMap:
             nonlocal drawing
             grid_x = x // cell_size
             grid_y = y // cell_size
-            if 0 <= grid_x < edited_map.shape[1] and 0 <= grid_y < edited_map.shape[0]:
+            if (
+                0 <= grid_x < edited_map.shape[1]
+                and 0 <= grid_y < edited_map.shape[0]
+            ):
                 if event == cv2.EVENT_LBUTTONDOWN:
                     drawing = True
                     edited_map[grid_y, grid_x] = 1 - edited_map[grid_y, grid_x]
@@ -128,7 +135,10 @@ class LayoutMap:
         def update_display():
             display_map = cv2.resize(
                 edited_map * 255,
-                (edited_map.shape[1] * cell_size, edited_map.shape[0] * cell_size),
+                (
+                    edited_map.shape[1] * cell_size,
+                    edited_map.shape[0] * cell_size,
+                ),
                 interpolation=cv2.INTER_NEAREST,
             )
             cv2.imshow("Editable Map", display_map)
@@ -185,13 +195,19 @@ class LayoutMap:
             for j in range(binary_map.shape[1]):
                 if binary_map[i, j] == 1:
                     x_samples = np.random.uniform(
-                        self.x_edges[i], self.x_edges[i + 1], num_samples_per_grid
+                        self.x_edges[i],
+                        self.x_edges[i + 1],
+                        num_samples_per_grid,
                     )
                     y_samples = np.random.uniform(
-                        self.y_edges[j], self.y_edges[j + 1], num_samples_per_grid
+                        self.y_edges[j],
+                        self.y_edges[j + 1],
+                        num_samples_per_grid,
                     )
                     z_samples = np.full_like(x_samples, z_value)
-                    grid_points = np.stack((x_samples, y_samples, z_samples), axis=1)
+                    grid_points = np.stack(
+                        (x_samples, y_samples, z_samples), axis=1
+                    )
                     wall_points_3d.append(grid_points)
 
         if wall_points_3d:
@@ -213,9 +229,11 @@ class LayoutMap:
         )
         self.wall_pcd = o3d.geometry.PointCloud()
         self.wall_pcd.points = o3d.utility.Vector3dVector(wall_points)
-        
+
         # Create timestamped directory for wall results
-        print(f"Extracted wall point cloud with {len(self.wall_pcd.points)} points.")
+        print(
+            f"Extracted wall point cloud with {len(self.wall_pcd.points)} points."
+        )
 
     def save_wall_pcd(self, output_path="wall_points.pcd"):
         """
@@ -316,7 +334,9 @@ class RRT:
 
             # Check if the node is already in the tree_costs (this should always be the case)
             if node not in self.tree_costs:
-                self.tree_costs[node] = float("inf")  # Initialize with a very high cost
+                self.tree_costs[node] = float(
+                    "inf"
+                )  # Initialize with a very high cost
 
             potential_cost = self.tree_costs[new_node] + np.linalg.norm(
                 np.array(new_node) - np.array(node)
@@ -459,7 +479,9 @@ class RRT:
         # Draw the path if provided
         if path:
             path = np.array(path)
-            plt.plot(path[:, 0], path[:, 1], color="blue", linewidth=2, marker="o")
+            plt.plot(
+                path[:, 0], path[:, 1], color="blue", linewidth=2, marker="o"
+            )
 
         plt.title("Occupancy Grid Map and Path")
         plt.xlabel("X Cells")
@@ -469,7 +491,9 @@ class RRT:
 
 
 class NavigationGraph:
-    def __init__(self, cfg: DictConfig, pcd: o3d.geometry.PointCloud, cell_size: int):
+    def __init__(
+        self, cfg: DictConfig, pcd: o3d.geometry.PointCloud, cell_size: int
+    ):
         """Initialization of the NavigationGraph class.
 
         Args:
@@ -480,9 +504,9 @@ class NavigationGraph:
 
         self.pcd_min = np.min(np.array(pcd.points), axis=0)
         self.pcd_max = np.max(np.array(pcd.points), axis=0)
-        self.grid_size = np.ceil((self.pcd_max - self.pcd_min) / cell_size + 1).astype(
-            np.int32
-        )
+        self.grid_size = np.ceil(
+            (self.pcd_max - self.pcd_min) / cell_size + 1
+        ).astype(np.int32)
         self.grid_size = self.grid_size[[0, 1]]
         print(self.grid_size)
         self.cell_size = cell_size
@@ -558,7 +582,9 @@ class NavigationGraph:
         largest_component = 0
         largest_size = 0
 
-        for label in range(1, num_labels):  # Start from 1, as 0 is the background
+        for label in range(
+            1, num_labels
+        ):  # Start from 1, as 0 is the background
             component_size = np.sum(labels == label)
             if component_size > largest_size:
                 largest_size = component_size
@@ -585,7 +611,10 @@ class NavigationGraph:
         plt.figure(figsize=(8, 8))
         # Use cmap='gray' instead of 'gray_r'
         plt.imshow(
-            occupancy_grid_map, cmap="gray", origin="lower", interpolation="nearest"
+            occupancy_grid_map,
+            cmap="gray",
+            origin="lower",
+            interpolation="nearest",
         )
         plt.colorbar(label="Occupancy")
         plt.title("Occupancy Grid Map")
@@ -608,7 +637,10 @@ class NavigationGraph:
 
         # Display the occupancy grid map
         plt.imshow(
-            occupancy_grid_map, cmap="gray", origin="lower", interpolation="nearest"
+            occupancy_grid_map,
+            cmap="gray",
+            origin="lower",
+            interpolation="nearest",
         )
 
         # Add the start point if provided
@@ -618,7 +650,12 @@ class NavigationGraph:
                 0 <= start[1] < occupancy_grid_map.shape[0]
             ):
                 plt.scatter(
-                    start[0], start[1], color="blue", label="Start", s=50, marker="o"
+                    start[0],
+                    start[1],
+                    color="blue",
+                    label="Start",
+                    s=50,
+                    marker="o",
                 )
 
         # Add the end point if provided and if it is within the grid bounds
@@ -627,7 +664,9 @@ class NavigationGraph:
             if (0 <= end[0] < occupancy_grid_map.shape[1]) and (
                 0 <= end[1] < occupancy_grid_map.shape[0]
             ):
-                plt.scatter(end[0], end[1], color="red", label="End", s=50, marker="x")
+                plt.scatter(
+                    end[0], end[1], color="red", label="End", s=50, marker="x"
+                )
 
         # Add a colorbar, title, and labels
         plt.colorbar(label="Occupancy")
@@ -656,7 +695,10 @@ class NavigationGraph:
         y, x = int(point[0]), int(point[1])  # Unpack input point as (row, col)
 
         # Boundary check
-        if not (0 <= y < free_space_map.shape[0] and 0 <= x < free_space_map.shape[1]):
+        if not (
+            0 <= y < free_space_map.shape[0]
+            and 0 <= x < free_space_map.shape[1]
+        ):
             print(f"Point ({y}, {x}) is out of bounds!")
             return None
 
@@ -668,13 +710,17 @@ class NavigationGraph:
         free_space_indices = np.argwhere(free_space_map == 1)
 
         # Calculate Euclidean distances to all free space points
-        distances = np.linalg.norm(free_space_indices - np.array([y, x]), axis=1)
+        distances = np.linalg.norm(
+            free_space_indices - np.array([y, x]), axis=1
+        )
 
         # Find the point with the minimum distance
         nearest_idx = np.argmin(distances)
         nearest_point = free_space_indices[nearest_idx]
 
-        return tuple(nearest_point)  # Return the nearest free space point (row, col)
+        return tuple(
+            nearest_point
+        )  # Return the nearest free space point (row, col)
 
     def snap_to_free_space_directional(
         self, point, start_point, free_space_map, search_radius=50
@@ -694,7 +740,10 @@ class NavigationGraph:
         y, x = int(point[0]), int(point[1])
 
         # Boundary check
-        if not (0 <= y < free_space_map.shape[0] and 0 <= x < free_space_map.shape[1]):
+        if not (
+            0 <= y < free_space_map.shape[0]
+            and 0 <= x < free_space_map.shape[1]
+        ):
             print(f"Point ({y}, {x}) is out of bounds!")
             return None
 
@@ -725,7 +774,9 @@ class NavigationGraph:
 
         # Search along direction failed -> global snap
         free_space_indices = np.argwhere(free_space_map == 1)
-        distances = np.linalg.norm(free_space_indices - np.array([y, x]), axis=1)
+        distances = np.linalg.norm(
+            free_space_indices - np.array([y, x]), axis=1
+        )
         nearest_idx = np.argmin(distances)
         nearest_point = free_space_indices[nearest_idx]
 
@@ -767,7 +818,9 @@ class NavigationGraph:
         # deep copy the free space
         free_space_map = np.copy(self.free_space)
 
-        boundary_map = binary_erosion(free_space_map, iterations=1).astype(np.uint8)
+        boundary_map = binary_erosion(free_space_map, iterations=1).astype(
+            np.uint8
+        )
 
         # get the boundary points
         boundary_map = free_space_map - boundary_map
@@ -882,7 +935,9 @@ class NavigationGraph:
 
     def remove_degree_2_nodes_and_reconnect(self, graph):
         # Find nodes with degree 2
-        nodes_to_remove = [node for node, degree in graph.degree() if degree == 2]
+        nodes_to_remove = [
+            node for node, degree in graph.degree() if degree == 2
+        ]
 
         for node in nodes_to_remove:
             # Find the neighbors of this node
@@ -893,7 +948,8 @@ class NavigationGraph:
                 n1, n2 = neighbors
                 # Add a new edge to connect the two neighbors
                 dist = np.linalg.norm(
-                    np.array(graph.nodes[n1]["pos"]) - np.array(graph.nodes[n2]["pos"])
+                    np.array(graph.nodes[n1]["pos"])
+                    - np.array(graph.nodes[n2]["pos"])
                 )
                 graph.add_edge(n1, n2, dist=dist)
 
@@ -1062,14 +1118,19 @@ class NavigationGraph:
             return path
 
         except nx.NetworkXNoPath:
-            print(f"No path found between {nearest_start_node} and {nearest_goal_node}")
+            print(
+                f"No path found between {nearest_start_node} and {nearest_goal_node}"
+            )
             return None
 
     def free_space_check(self, point):
         row, col = point
 
         # Check if the point is within the map boundaries
-        if 0 <= row < self.free_space.shape[0] and 0 <= col < self.free_space.shape[1]:
+        if (
+            0 <= row < self.free_space.shape[0]
+            and 0 <= col < self.free_space.shape[1]
+        ):
             # Check if the point is in free space (value 1 indicates free space)
             return self.free_space[row, col] == 1
         else:
@@ -1116,7 +1177,10 @@ class NavigationGraph:
 
             # Get the goal point coordinates
             goal_x, goal_y = int(event.xdata), int(event.ydata)
-            goal[0] = (int(event.ydata), int(event.xdata))  # Convert to (row, col)
+            goal[0] = (
+                int(event.ydata),
+                int(event.xdata),
+            )  # Convert to (row, col)
 
             # Clear previously drawn image content
             ax.clear()
@@ -1137,7 +1201,9 @@ class NavigationGraph:
                     goal[0], start, self.free_space
                 )
                 snapped_goal_2d = snapped_goal
-                print(f"Snapped Goal Point: {snapped_goal}, Goal Point: {goal[0]}")
+                print(
+                    f"Snapped Goal Point: {snapped_goal}, Goal Point: {goal[0]}"
+                )
                 ax.plot(
                     snapped_goal[1],
                     snapped_goal[0],
@@ -1146,7 +1212,9 @@ class NavigationGraph:
                     label="Snapped Goal",
                 )
 
-                snapped_goal = self.calculate_pos_3d(snapped_goal[0], snapped_goal[1])
+                snapped_goal = self.calculate_pos_3d(
+                    snapped_goal[0], snapped_goal[1]
+                )
 
                 self.snapped_goal = snapped_goal
 
@@ -1243,7 +1311,9 @@ class NavigationGraph:
 
         # Iterate through path nodes, draw the nodes
         for node in path:
-            cv2.circle(fig_free, tuple(np.int32(node[::-1])), 1, (0, 0, 255), -1)
+            cv2.circle(
+                fig_free, tuple(np.int32(node[::-1])), 1, (0, 0, 255), -1
+            )
 
         # Display the path image
         plt.figure(figsize=(10, 10))
@@ -1332,7 +1402,9 @@ def remaining_path(path, current_pose):
     current_xy = current_position[:2]  # Ignore Z component
 
     # Find the closest point in the global path to the current position (based on XY distance only)
-    distances = [np.linalg.norm(np.array(point[:2]) - current_xy) for point in path]
+    distances = [
+        np.linalg.norm(np.array(point[:2]) - current_xy) for point in path
+    ]
     closest_idx = np.argmin(distances)
 
     # Ensure we do not go backwards in the path
