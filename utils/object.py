@@ -692,12 +692,14 @@ class LocalObject(BaseObject):
             return
 
         # if waiting enough, then judge next step by lm status
-        if self.is_low_mobility:
-            self.status = LocalObjStatus.LM_ELIMINATION
-            return
-        else:
-            self.status = LocalObjStatus.HM_ELIMINATION
-            return
+        # if self.is_low_mobility:
+        #     self.status = LocalObjStatus.LM_ELIMINATION
+        #     return
+        # else:
+        #     self.status = LocalObjStatus.HM_ELIMINATION
+        #     return
+        self.status = LocalObjStatus.LM_ELIMINATION
+        return
 
     def stability_check(
         self,
