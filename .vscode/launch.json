@@ -1,0 +1,76 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    // Example launch of a python file
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal"
+    },
+    // Example gdb launch of a ros executable
+    {
+      "name": "(gdb) Launch",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/install/${input:package}/lib/${input:package}/${input:program}",
+      "args": [],
+      "preLaunchTask": "build",
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "Debug applications.runner_ros",
+      "type": "python",
+      "request": "launch",
+
+      // 关键点： 用 module 模式，而不是 program
+      "module": "applications.runner_ros",
+
+      // 可选：如果有命令行参数，加在这里
+      "args": [
+        // "--xxx", "value"
+      ],
+
+      // 工作目录，通常设为项目根目录
+      "cwd": "${workspaceFolder}",
+
+      "console": "integratedTerminal",
+
+      // 如果你需要使用环境变量
+      // "env": {
+      //     "SOME_ENV": "value"
+      // },
+
+      // 可选：使用你选中的解释器
+      "python": "${command:python.interpreterPath}"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "package",
+      "type": "promptString",
+      "description": "Package name"
+      // "default": "examples_rclcpp_minimal_publisher"
+    },
+    {
+      "id": "program",
+      "type": "promptString",
+      "description": "Program name"
+      // "default": "publisher_member_function"
+    }
+  ]
+}

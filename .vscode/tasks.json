@@ -1,0 +1,179 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "tasks": [
+    // 1) 只做 Lint：ruff + mypy
+    {
+      "label": "python: lint",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-c",
+        "source ~/anaconda3/etc/profile.d/conda.sh && conda run -n dualmap python -m ruff check . && conda run -n dualmap python -m mypy ."
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": ["$ruff", "$mypy"]
+    },
+
+    // DualMap Debug Tasks
+    {
+      "label": "debug-dualmap-ros",
+      "detail": "Debug DualMap ROS runner with conda environment",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-c",
+        "source ~/anaconda3/etc/profile.d/conda.sh && conda run -n dualmap python -m debugpy --listen 5678 --wait-for-client -m applications.runner_ros"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "debug-dualmap-dataset",
+      "detail": "Debug DualMap dataset runner with conda environment",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-c",
+        "source ~/anaconda3/etc/profile.d/conda.sh && conda run -n dualmap python -m debugpy --listen 5679 --wait-for-client -m applications.runner_dataset"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "run-dualmap-ros",
+      "detail": "Run DualMap ROS runner in conda environment",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-c",
+        "source ~/anaconda3/etc/profile.d/conda.sh && conda run -n dualmap python -m applications.runner_ros"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "run-dualmap-dataset",
+      "detail": "Run DualMap dataset runner in conda environment",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-c",
+        "source ~/anaconda3/etc/profile.d/conda.sh && conda run -n dualmap python -m applications.runner_dataset"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+
+    // install-debugpy
+    {
+      "label": "install-debugpy",
+      "detail": "Install debugpy in dualmap conda environment",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-c",
+        "source ~/anaconda3/etc/profile.d/conda.sh && conda run -n dualmap pip install debugpy"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+
+    // VSCode tasks for launching with debug mode
+    {
+      "label": "debug-dualmap-ros",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-c",
+        "source ~/anaconda3/etc/profile.d/conda.sh && cd ${workspaceFolder} && conda run -n dualmap DUALMAP_DEBUG=1 python -m applications.runner_ros"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+
+    {
+      "label": "debug-dualmap-dataset",
+      "type": "shell",
+      "command": "conda",
+      "args": [
+        "run",
+        "-n",
+        "dualmap",
+        "bash",
+        "-c",
+        "cd ${workspaceFolder} && DUALMAP_DEBUG=1 python -m applications.runner_dataset"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "echo",
+      "args": ["Build task placeholder"],
+      "group": "build"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "package",
+      "type": "promptString",
+      "description": "Package name"
+    }
+  ],
+}
