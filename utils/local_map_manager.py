@@ -13,6 +13,7 @@ from omegaconf import DictConfig
 from utils.base_map_manager import BaseMapManager
 from utils.navigation_helper import NavigationGraph
 from utils.object import LocalObject, LocalObjStatus
+from utils.object import GlobalObject
 from utils.types import GlobalObservation, GoalMode, Observation
 from utils.time_utils import get_timestamped_path
 
@@ -39,8 +40,8 @@ class LocalMapManager(BaseMapManager):
         self.global_observations = []
 
         # objects list(对象列表)
-        self.local_map = []
-        self.global_map = []
+        self.local_map:List[LocalObject] = []
+        self.global_map:List[GlobalObject] = []
 
         self.graph = (
             nx.Graph()
@@ -147,7 +148,7 @@ class LocalMapManager(BaseMapManager):
     ) -> None:
         """处理当前观测并更新局部地图。"""
 
-        # if first, then just insert(如果是第一次，则直接插入)
+        # 如果是第一次获得观测，还未曾构建局部地图，则直接利用每个观测初始化局部地图对象
         if self.is_initialized == False:
             # Init the local map
             logger.info("[LocalMap] Init Local Map by first observation")
