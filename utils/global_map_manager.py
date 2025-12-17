@@ -63,6 +63,8 @@ class GlobalMapManager(BaseMapManager):
         return len(self.global_map) > 0
 
     def set_layout_info(self, layout_pcd):
+        if 0 == len(layout_pcd.points):
+            return
         self.layout_map.set_layout_pcd(layout_pcd)
 
         if self.layout_map.wall_pcd is None:
@@ -277,7 +279,7 @@ class GlobalMapManager(BaseMapManager):
                 f"[GlobalMap] Preload wall path not found. Using default map save path: {load_dir}"
             )
         load_dir = os.path.join(load_dir, "wall")
-        
+
         wall_pcd_path = os.path.join(load_dir, "wall.pcd")
 
         if not Path(wall_pcd_path).is_file():
