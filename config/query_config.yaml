@@ -3,3 +3,4 @@ defaults:
   - _self_
 
 map_dir: ${output_path}/${dataset_name}_${scene_id}/map
+test_map_dir: /home/tang123/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/global_map

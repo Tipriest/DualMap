@@ -32,7 +32,7 @@ yolo:
 
   ## Dataset Classes List (_ycb add the classes from YCB)
   # given_classes_path: ./config/class_list/hm3d300_classes.txt
-  given_classes_path: ./config/class_list/hm3d300_classes_ycb.txt
+  given_classes_path: /home/tang123/DualMap/config/class_list/hm3d300_classes_ycb.txt
   # given_classes_path: ./config/class_list/scannet200_classes.txt
 
   # Pre-set for stable filter, do not delete this

@@ -1,7 +1,9 @@
 import copy
 import json
 import os
+os.environ['DISPLAY'] = ''
 import sys
+from pathlib import Path
 
 import hydra
 import matplotlib
@@ -11,8 +13,35 @@ import open_clip
 import torch
 import torch.nn.functional as F
 from omegaconf import DictConfig, OmegaConf
+sys.path.append("/home/tang123/DualMap")
 
 from utils.object import BaseObject
+from mobileclip.modules.common.mobileone import reparameterize_model
+from task_extract import TaskExtractor
+
+
+def transfromPos(position: np.array) -> np.array:
+    '''
+    输入为dualmap世界坐标系读出的坐标，返回gazebo坐标系下的坐标
+    '''
+    return np.array([position[1], -position[0], -position[2]])
+
+def getInstances():
+
+    text_query = input("Enter your query (type 'bye' to exit): ").strip()
+    
+    if text_query == "bye" or text_query == "quit":
+        print("Exiting query loop...")
+        return
+    
+    ai_scientist = TaskExtractor(text_query)
+    extract_res = ai_scientist.extract_navigation_components()
+
+    return extract_res
+
+
+
+    
 
 
 @hydra.main(version_base=None, config_path="../config/", config_name="query_config")
@@ -21,12 +50,13 @@ def main(cfg: DictConfig):
     ### Loading Color map: class id --> color Dict
     if cfg.yolo.use_given_classes:
         given_classes_path = cfg.yolo.given_classes_path
-        dir_path = os.path.dirname(given_classes_path)  # './model'
+        # dir_path = os.path.dirname(given_classes_path)  # './model'
+        dir_path = Path(given_classes_path).parent
         base_name = os.path.basename(given_classes_path)  # 'gpt_indoor_table.txt'
         file_root, _ = os.path.splitext(base_name)  # 'gpt_indoor_table'
 
         class_id_colors_path = os.path.join(dir_path, file_root + "_id_colors.json")
-
+        print(class_id_colors_path)
     else:
         class_id_colors_path = os.path.join(
             cfg.output_path,
@@ -73,9 +103,11 @@ def main(cfg: DictConfig):
 
     ### Loading saved results
     # if map_dir is not provided, use the default path
+    
+    # FLAG: 移植实机需处理目录 
     load_dir = None
-    if os.path.exists(cfg.map_dir):
-        load_dir = cfg.map_dir
+    if os.path.exists(cfg.test_map_dir):
+        load_dir = cfg.test_map_dir
     else:
         load_dir = os.path.join(
             cfg.output_path, f"{cfg.dataset_name}_{cfg.scene_id}", "map"
@@ -117,8 +149,7 @@ def main(cfg: DictConfig):
 
     # Only reparameterize if the model is MobileCLIP
     if "MobileCLIP" in cfg.clip.model_name:
-        from mobileclip.modules.common.mobileone import reparameterize_model
-
+        print("==> Opening mobileclip")
         clip_model = reparameterize_model(clip_model)
 
     clip_tokenizer = open_clip.get_tokenizer(cfg.clip.model_name)
@@ -127,56 +158,11 @@ def main(cfg: DictConfig):
 
     cmap = matplotlib.colormaps.get_cmap("turbo")
 
-    ### Set the visualizer
-    vis = o3d.visualization.VisualizerWithKeyCallback()
-    # Create window
-    vis.create_window(window_name=f"Offline Visualization", width=1920, height=1920)
-
-    for obj in obj_map:
-        vis.add_geometry(obj.pcd)
-
     print(f"Obj Map length: %d" % len(obj_map))
 
-    view_param = None
-    if os.path.exists(viewpoint_path):
-        print(f"Loading saved viewpoint from {viewpoint_path}")
-        view_param = o3d.io.read_pinhole_camera_parameters(viewpoint_path)
-        vis.get_view_control().convert_from_pinhole_camera_parameters(view_param)
+    def query_callback(instance_query):
 
-    # variables for query sim color map
-    queried_color_objs = []
-    highlighted_objs = []
-
-    def pcd_sem_color_callback(vis):
-        print("Show the Pointcloud with semantic colors")
-        vis.clear_geometries()
-        for obj in obj_map:
-            sem_pcd = copy.deepcopy(obj.pcd)
-            color = class_id_colors[obj.class_id]
-            vis.add_geometry(sem_pcd.paint_uniform_color(color))
-        reset_view()
-
-    def pcd_rgb_color_callback(vis):
-        print("Show the Pointcloud with RGB colors")
-        vis.clear_geometries()
-        for obj in obj_map:
-            vis.add_geometry(obj.pcd)
-        reset_view()
-
-    ### Visualization exit
-    def vis_exit_callback(vis):
-        vis.destroy_window()
-        sys.exit(0)
-
-    def query_callback(vis):
-        text_query = input("Enter your query: ")
-
-        # exit the querying
-        if text_query == "exit" or text_query == "quit":
-            vis.destroy_window()
-            sys.exit(0)
-
-        text_queries = [text_query]
+        text_queries = [instance_query]
 
         text_queries_tokenized = clip_tokenizer(text_queries).to("cuda")
         text_query_ft = clip_model.encode_text(text_queries_tokenized)
@@ -202,101 +188,33 @@ def main(cfg: DictConfig):
             print(
                 f"{i+1}. No. {idx} {class_id_names[obj_map[idx].class_id]}: {cos_val:.3f}"
             )
-
-        ## Save the highlighted objects with top5 in red color
-        global highlighted_objs
-        highlighted_objs = []
-        for idx, obj in enumerate(obj_map):
-            temp_obj = copy.deepcopy(obj)
-            if idx in top_k_idx.tolist():
-                color = [1.0, 0.0, 0.0]  # Red color
-                temp_obj.pcd.paint_uniform_color(color)
-            highlighted_objs.append(temp_obj)
-
-        max_value = cos_sim.max()
-        min_value = cos_sim.min()
-        normalized_similarities = (cos_sim - min_value) / (max_value - min_value)
-        similarity_colors = cmap(normalized_similarities.detach().cpu().numpy())[
-            ..., :3
-        ]
-
-        ## Save the colored objects
-        global queried_color_objs
-        queried_color_objs = []
-        for idx, obj in enumerate(obj_map):
-            temp_obj = copy.deepcopy(obj)
-            # change the color in temp_obj
-            temp_obj.pcd.colors = o3d.utility.Vector3dVector(
-                np.tile(
-                    [
-                        similarity_colors[idx, 0].item(),
-                        similarity_colors[idx, 1].item(),
-                        similarity_colors[idx, 2].item(),
-                    ],
-                    (len(temp_obj.pcd.points), 1),
-                )
+            print(
+                f"{obj_map[idx].class_name}, position {obj_map[idx].bbox_2d}, path {obj_map[idx].save_path}"
             )
-            queried_color_objs.append(temp_obj)
+            
 
-        ### visualization
-        vis.clear_geometries()
-        for obj in highlighted_objs:
-            vis.add_geometry(obj.pcd)
+    def run():
 
-        reset_view()
+        extract_res = getInstances()
 
-    def highlight_objs_callback(vis):
-        global highlighted_objs
-        vis.clear_geometries()
-        for obj in highlighted_objs:
-            vis.add_geometry(obj.pcd)
-        reset_view()
+        target_room = extract_res["target_room"]
+        target_object = extract_res["target_object"]
+        avoid_object = extract_res["avoid_object"]
 
-    def queried_color_objs_callback(vis):
-        global queried_color_objs
-        vis.clear_geometries()
-        for obj in queried_color_objs:
-            vis.add_geometry(obj.pcd)
-        reset_view()
+        print(f"[offline] target room {target_room}, target object {target_object}\
+                avoid_object {avoid_object}")
+        
+        print("----------------------------------")
+        
+        print("==> target object")
+        query_callback(target_object + "in" + target_room)
+        print("==============================")
+        print("==> avoid object")
+        query_callback(avoid_object)
+        print("==============================")
 
-    def help_callback(vis):
-        help_info = """
-        Keybindings:
-        Q - Quit the application
-        R - Display the point cloud with RGB colors
-        C - Display the point cloud with semantic colors
-        F - Enter a query to find top similarity objects
-        H - Display this help message
-        N - Highlight objects based on previous query results
-        M - Colored objects based on previous query results
-        S - Save the current viewpoint
 
-        Press the corresponding key to perform the action.
-        """
-        print(help_info)
-
-    def save_view_callback(vis):
-        ctr = vis.get_view_control()
-        param = ctr.convert_to_pinhole_camera_parameters()
-        o3d.io.write_pinhole_camera_parameters(viewpoint_path, param)
-        print(f"Viewpoint saved to {viewpoint_path}")
-
-    def reset_view():
-        if view_param is not None:
-            vis.get_view_control().convert_from_pinhole_camera_parameters(view_param)
-
-    vis.register_key_callback(ord("Q"), vis_exit_callback)
-    vis.register_key_callback(ord("R"), pcd_rgb_color_callback)
-    vis.register_key_callback(ord("C"), pcd_sem_color_callback)
-    vis.register_key_callback(ord("F"), query_callback)
-    vis.register_key_callback(ord("N"), highlight_objs_callback)
-    vis.register_key_callback(ord("M"), queried_color_objs_callback)
-    vis.register_key_callback(ord("H"), help_callback)
-    vis.register_key_callback(ord("S"), save_view_callback)
-
-    help_callback(vis)
-
-    vis.run()
+    run()
 
 
 if __name__ == "__main__":
