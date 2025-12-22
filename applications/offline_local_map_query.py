@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 import hydra
-import matplotlib
+import yaml
 import numpy as np
 import open3d as o3d
 import open_clip
@@ -24,7 +24,39 @@ def transfromPos(position: np.array) -> np.array:
     '''
     输入为dualmap世界坐标系读出的坐标，返回gazebo坐标系下的坐标
     '''
-    return np.array([position[1], -position[0], -position[2]])
+    # return np.array([position[1], -position[0], -position[2]])
+    return np.array([position[1], -position[0]])
+
+def pop_hazard2yaml(corners: list):
+    '''
+    pump semantic hazard to yaml, pass to navigation modual
+    '''
+    yaml_path = "/home/tang123/Documents/vln_gazebo_simulator/src/TB3-Gazebo-Nav2-explore-lite/config/nav2/keepout_bboxes.yaml"
+
+    left_down = corners[0]
+    right_down = corners[1]
+    left_up = corners[2]
+    right_up = corners[3]
+
+    yaml_content = """bboxes:
+  - frame: map
+    corners:
+      - [{:.1f}, {:.1f}]  # 左下角
+      - [{:.1f}, {:.1f}]   # 右下角
+      - [{:.1f}, {:.1f}]    # 右上角
+      - [{:.1f}, {:.1f}]   # 左上角
+    """.format(
+        left_down[0], left_down[1],
+        right_down[0], right_down[1],
+        left_up[0], left_up[1],
+        right_up[0], right_up[1]
+        )
+
+    with open(yaml_path, 'w') as f:
+        f.write(yaml_content)
+
+    print(f"[query] Pumped semantic hazard to yaml: {yaml_path}")
+
 
 def getInstances():
 
@@ -156,7 +188,7 @@ def main(cfg: DictConfig):
 
     print("Done initializing CLIP model.")
 
-    cmap = matplotlib.colormaps.get_cmap("turbo")
+    # cmap = matplotlib.colormaps.get_cmap("turbo")
 
     print(f"Obj Map length: %d" % len(obj_map))
 
@@ -185,12 +217,34 @@ def main(cfg: DictConfig):
         for i, (cos_val, idx) in enumerate(
             zip(top_k_cos_sim.tolist(), top_k_idx.tolist())
         ):
+
+            bbox_2d = obj_map[idx].bbox_2d
+            min_x = bbox_2d.min_bound[0]
+            min_y = bbox_2d.min_bound[1]
+
+            max_x = bbox_2d.max_bound[0]
+            max_y = bbox_2d.max_bound[1]
+
+            left_down_map = transfromPos(np.array([min_x, min_y]))
+            right_down_map = transfromPos(np.array([max_x, min_y]))
+            left_up_map = transfromPos(np.array([max_x, max_y]))
+            right_up_map = transfromPos(np.array([min_x, max_y]))
+
             print(
                 f"{i+1}. No. {idx} {class_id_names[obj_map[idx].class_id]}: {cos_val:.3f}"
             )
             print(
                 f"{obj_map[idx].class_name}, position {obj_map[idx].bbox_2d}, path {obj_map[idx].save_path}"
             )
+
+            print("corners")
+            print(left_down_map)
+            print(right_down_map)
+            print(left_up_map)
+            print(right_up_map)
+            corner_list = [left_down_map, right_down_map, left_up_map, right_up_map]
+
+            return corner_list
             
 
     def run():
@@ -207,11 +261,17 @@ def main(cfg: DictConfig):
         print("----------------------------------")
         
         print("==> target object")
-        query_callback(target_object + "in" + target_room)
+        target_corner_list = query_callback(target_object + "in" + target_room)
         print("==============================")
-        print("==> avoid object")
-        query_callback(avoid_object)
-        print("==============================")
+        if avoid_object != "None":
+            print("==> avoid object")
+            avoid_corner_list = query_callback(avoid_object)
+            pop_hazard2yaml(avoid_corner_list)
+            print("==============================")
+            
+
+        else:
+            print("Nothing to avoid!")
 
 
     run()
