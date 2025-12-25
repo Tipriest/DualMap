@@ -15,17 +15,23 @@ from omegaconf import DictConfig, OmegaConf
 from utils.object import BaseObject
 
 
-@hydra.main(version_base=None, config_path="../config/", config_name="query_config")
+@hydra.main(
+    version_base=None, config_path="../config/", config_name="query_config"
+)
 def main(cfg: DictConfig):
 
     ### Loading Color map: class id --> color Dict
     if cfg.yolo.use_given_classes:
         given_classes_path = cfg.yolo.given_classes_path
         dir_path = os.path.dirname(given_classes_path)  # './model'
-        base_name = os.path.basename(given_classes_path)  # 'gpt_indoor_table.txt'
+        base_name = os.path.basename(
+            given_classes_path
+        )  # 'gpt_indoor_table.txt'
         file_root, _ = os.path.splitext(base_name)  # 'gpt_indoor_table'
 
-        class_id_colors_path = os.path.join(dir_path, file_root + "_id_colors.json")
+        class_id_colors_path = os.path.join(
+            dir_path, file_root + "_id_colors.json"
+        )
 
     else:
         class_id_colors_path = os.path.join(
@@ -38,12 +44,16 @@ def main(cfg: DictConfig):
     print("Loading classes id --> colors from: {}".format(class_id_colors_path))
 
     if not os.path.exists(class_id_colors_path):
-        raise FileNotFoundError(f"Error: File not found: {class_id_colors_path}")
+        raise FileNotFoundError(
+            f"Error: File not found: {class_id_colors_path}"
+        )
 
     class_id_colors = {}
     with open(class_id_colors_path, "r") as file:
         class_id_colors = json.load(file)
-    class_id_colors = {int(key): value for key, value in class_id_colors.items()}
+    class_id_colors = {
+        int(key): value for key, value in class_id_colors.items()
+    }
 
     # Dict: class id --> name
     class_id_names = {}
@@ -64,7 +74,9 @@ def main(cfg: DictConfig):
 
         with open(class_id_names_path, "r") as file:
             class_id_names = json.load(file)
-        class_id_names = {int(key): value for key, value in class_id_names.items()}
+        class_id_names = {
+            int(key): value for key, value in class_id_names.items()
+        }
 
     print("Loading classes id --> names  from: {}".format(class_id_names_path))
 
@@ -130,7 +142,9 @@ def main(cfg: DictConfig):
     ### Set the visualizer
     vis = o3d.visualization.VisualizerWithKeyCallback()
     # Create window
-    vis.create_window(window_name=f"Offline Visualization", width=1920, height=1920)
+    vis.create_window(
+        window_name=f"Offline Visualization", width=1920, height=1920
+    )
 
     for obj in obj_map:
         vis.add_geometry(obj.pcd)
@@ -141,7 +155,9 @@ def main(cfg: DictConfig):
     if os.path.exists(viewpoint_path):
         print(f"Loading saved viewpoint from {viewpoint_path}")
         view_param = o3d.io.read_pinhole_camera_parameters(viewpoint_path)
-        vis.get_view_control().convert_from_pinhole_camera_parameters(view_param)
+        vis.get_view_control().convert_from_pinhole_camera_parameters(
+            view_param
+        )
 
     # variables for query sim color map
     queried_color_objs = []
@@ -190,7 +206,9 @@ def main(cfg: DictConfig):
         map_clip_fts = torch.stack(values, dim=0).to("cuda")
 
         ## claculate the cos sim between text clip and map clips
-        cos_sim = F.cosine_similarity(text_query_ft.unsqueeze(0), map_clip_fts, dim=-1)
+        cos_sim = F.cosine_similarity(
+            text_query_ft.unsqueeze(0), map_clip_fts, dim=-1
+        )
 
         ## Get top k candidates
         top_k = 1
@@ -215,10 +233,12 @@ def main(cfg: DictConfig):
 
         max_value = cos_sim.max()
         min_value = cos_sim.min()
-        normalized_similarities = (cos_sim - min_value) / (max_value - min_value)
-        similarity_colors = cmap(normalized_similarities.detach().cpu().numpy())[
-            ..., :3
-        ]
+        normalized_similarities = (cos_sim - min_value) / (
+            max_value - min_value
+        )
+        similarity_colors = cmap(
+            normalized_similarities.detach().cpu().numpy()
+        )[..., :3]
 
         ## Save the colored objects
         global queried_color_objs
@@ -283,7 +303,9 @@ def main(cfg: DictConfig):
 
     def reset_view():
         if view_param is not None:
-            vis.get_view_control().convert_from_pinhole_camera_parameters(view_param)
+            vis.get_view_control().convert_from_pinhole_camera_parameters(
+                view_param
+            )
 
     vis.register_key_callback(ord("Q"), vis_exit_callback)
     vis.register_key_callback(ord("R"), pcd_rgb_color_callback)

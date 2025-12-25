@@ -24,7 +24,9 @@ class RunnerROS1(RunnerROSBase):
 
     def __init__(self, cfg):
         rospy.init_node("runner_ros", anonymous=True)
-        setup_logging(output_path=cfg.output_path, config_path=cfg.logging_config)
+        setup_logging(
+            output_path=cfg.output_path, config_path=cfg.logging_config
+        )
         self.logger = logging.getLogger(__name__)
         self.logger.info("[Runner ROS1]")
         self.logger.info(OmegaConf.to_yaml(cfg))
@@ -41,14 +43,18 @@ class RunnerROS1(RunnerROSBase):
         # Image and Odometry Subscribers
         if self.cfg.use_compressed_topic:
             self.logger.warning("[Main] Using compressed topics.")
-            self.rgb_sub = Subscriber(self.dataset_cfg.ros_topics.rgb, CompressedImage)
+            self.rgb_sub = Subscriber(
+                self.dataset_cfg.ros_topics.rgb, CompressedImage
+            )
             self.depth_sub = Subscriber(
                 self.dataset_cfg.ros_topics.depth, CompressedImage
             )
         else:
             self.logger.warning("[Main] Using uncompressed topics.")
             self.rgb_sub = Subscriber(self.dataset_cfg.ros_topics.rgb, Image)
-            self.depth_sub = Subscriber(self.dataset_cfg.ros_topics.depth, Image)
+            self.depth_sub = Subscriber(
+                self.dataset_cfg.ros_topics.depth, Image
+            )
 
         self.odom_sub = Subscriber(self.dataset_cfg.ros_topics.odom, Odometry)
 
@@ -75,8 +81,12 @@ class RunnerROS1(RunnerROSBase):
             rgb_img = self.decompress_image(rgb_msg.data, is_depth=False)
             depth_img = self.decompress_image(depth_msg.data, is_depth=True)
         else:
-            rgb_img = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding="rgb8")
-            depth_img = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="16UC1")
+            rgb_img = self.bridge.imgmsg_to_cv2(
+                rgb_msg, desired_encoding="rgb8"
+            )
+            depth_img = self.bridge.imgmsg_to_cv2(
+                depth_msg, desired_encoding="16UC1"
+            )
 
         depth_factor = getattr(self.dataset_cfg, 'depth_factor', 1000.0)
         depth_img = depth_img.astype(np.float32) / depth_factor
@@ -122,7 +132,9 @@ class RunnerROS1(RunnerROSBase):
 def run_ros1(cfg):
     """Launch the ROS1 runner in a background thread."""
     runner = RunnerROS1(cfg)
-    runner.logger.warning("[Main] ROS1 Runner started. Waiting for data stream...")
+    runner.logger.warning(
+        "[Main] ROS1 Runner started. Waiting for data stream..."
+    )
 
     spin_thread = threading.Thread(target=runner.spin)
     spin_thread.start()

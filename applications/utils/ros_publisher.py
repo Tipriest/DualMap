@@ -16,12 +16,22 @@ class ROSPublisher:
         self.bridge = CvBridge()
 
         # Create all required publishers
-        self.global_path_publisher = node.create_publisher(Path, "/global_path", 10)
-        self.local_path_publisher = node.create_publisher(Path, "/local_path", 10)
-        self.action_path_publisher = node.create_publisher(Path, "/action_path", 10)
+        self.global_path_publisher = node.create_publisher(
+            Path, "/global_path", 10
+        )
+        self.local_path_publisher = node.create_publisher(
+            Path, "/local_path", 10
+        )
+        self.action_path_publisher = node.create_publisher(
+            Path, "/action_path", 10
+        )
 
-        self.image_publisher = node.create_publisher(Image, "/annotated_image", 10)
-        self.fs_image_publisher = node.create_publisher(Image, "/fastsam_image", 10)
+        self.image_publisher = node.create_publisher(
+            Image, "/annotated_image", 10
+        )
+        self.fs_image_publisher = node.create_publisher(
+            Image, "/fastsam_image", 10
+        )
         self.fs_image_after_publisher = node.create_publisher(
             Image, "/fastsam_image_after", 10
         )
@@ -67,7 +77,9 @@ class ROSPublisher:
             if len(dualmap.local_map_manager.local_map):
                 start_time = time.time()
                 self._publish_local_map(
-                    dualmap.local_map_manager, dualmap.visualizer, publish_rgb=False
+                    dualmap.local_map_manager,
+                    dualmap.visualizer,
+                    publish_rgb=False,
                 )
                 print(
                     f"Publishing local map took {time.time() - start_time:.2f} seconds."
@@ -75,7 +87,9 @@ class ROSPublisher:
 
             if len(dualmap.global_map_manager.global_map):
                 self._publish_global_map(
-                    dualmap.global_map_manager, dualmap.visualizer, publish_rgb=False
+                    dualmap.global_map_manager,
+                    dualmap.visualizer,
+                    publish_rgb=False,
                 )
 
     def _publish_path(self, path, path_type):
@@ -129,8 +143,12 @@ class ROSPublisher:
 
         # Create Odometry message
         odom_msg = Odometry()
-        odom_msg.header.stamp = self.node.get_clock().now().to_msg()  # Timestamp
-        odom_msg.header.frame_id = "map"  # Parent frame (global coordinate system)
+        odom_msg.header.stamp = (
+            self.node.get_clock().now().to_msg()
+        )  # Timestamp
+        odom_msg.header.frame_id = (
+            "map"  # Parent frame (global coordinate system)
+        )
         odom_msg.child_frame_id = ""  # Child frame (robot coordinate system)
 
         # Set position and orientation
@@ -153,13 +171,17 @@ class ROSPublisher:
         # Publish Odometry message
         self.pose_publisher.publish(odom_msg)
 
-    def _publish_local_map(self, local_map_manager, visualizer, publish_rgb=True):
+    def _publish_local_map(
+        self, local_map_manager, visualizer, publish_rgb=True
+    ):
         all_positions = []
         all_rgb_colors = []
         all_semantic_colors = []
 
         for local_obj in local_map_manager.local_map:
-            obj_name = visualizer.obj_classes.get_classes_arr()[local_obj.class_id]
+            obj_name = visualizer.obj_classes.get_classes_arr()[
+                local_obj.class_id
+            ]
             positions = np.asarray(local_obj.pcd.points)
             colors = (np.asarray(local_obj.pcd.colors) * 255).astype(np.uint8)
             curr_obj_color = (
@@ -188,15 +210,21 @@ class ROSPublisher:
             all_positions, all_semantic_colors, self.local_sem_publisher, "map"
         )
 
-    def _publish_global_map(self, global_map_manager, visualizer, publish_rgb=True):
+    def _publish_global_map(
+        self, global_map_manager, visualizer, publish_rgb=True
+    ):
         all_positions = []
         all_rgb_colors = []
         all_semantic_colors = []
 
         for global_obj in global_map_manager.global_map:
-            obj_name = visualizer.obj_classes.get_classes_arr()[global_obj.class_id]
+            obj_name = visualizer.obj_classes.get_classes_arr()[
+                global_obj.class_id
+            ]
             positions = np.asarray(global_obj.pcd_2d.points)
-            colors = (np.asarray(global_obj.pcd_2d.colors) * 255).astype(np.uint8)
+            colors = (np.asarray(global_obj.pcd_2d.colors) * 255).astype(
+                np.uint8
+            )
             curr_obj_color = (
                 np.array(visualizer.obj_classes.get_class_color(obj_name)) * 255
             )
@@ -242,10 +270,18 @@ class ROSPublisher:
 
         # PointCloud2 field definition
         fields = [
-            PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
-            PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
-            PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
-            PointField(name="rgb", offset=12, datatype=PointField.UINT32, count=1),
+            PointField(
+                name="x", offset=0, datatype=PointField.FLOAT32, count=1
+            ),
+            PointField(
+                name="y", offset=4, datatype=PointField.FLOAT32, count=1
+            ),
+            PointField(
+                name="z", offset=8, datatype=PointField.FLOAT32, count=1
+            ),
+            PointField(
+                name="rgb", offset=12, datatype=PointField.UINT32, count=1
+            ),
         ]
 
         # Message header

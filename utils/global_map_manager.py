@@ -28,7 +28,7 @@ class GlobalMapManager(BaseMapManager):
         super().__init__(cfg)
 
         # global objects list
-        self.global_map = []
+        self.global_map:List[GlobalObject] = []
 
         # set global flag in tracker
         self.tracker.set_global()
@@ -259,6 +259,7 @@ class GlobalMapManager(BaseMapManager):
         pkl_files = [
             file for file in os.listdir(load_dir) if file.endswith(".pkl")
         ]
+        pkl_files.sort()
 
         # Skip loading if no .pkl files
         if not pkl_files:

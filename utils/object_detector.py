@@ -294,7 +294,9 @@ class Detector:
         if self.prev_keyframe_data is None:
             self.prev_keyframe_data = self.curr_data.copy()
             layout_pcd = self.depth_to_point_cloud(sample_rate=16)
-            with self.layout_lock:  # Ensure thread safety for layout_pointcloud(确保 layout_pointcloud 的线程安全)
+            with (
+                self.layout_lock
+            ):  # Ensure thread safety for layout_pointcloud(确保 layout_pointcloud 的线程安全)
                 self.layout_pointcloud += layout_pcd.voxel_down_sample(
                     voxel_size=self.cfg.layout_voxel_size
                 )

@@ -12,6 +12,7 @@ from utils.time_utils import timing_context
 from utils.types import DataInput
 from dualmap.core import Dualmap
 
+
 class RunnerROSBase:
     """
     Base class for ROS1 and ROS2 runners.
@@ -21,7 +22,7 @@ class RunnerROSBase:
     处理一些共同的逻辑内容像是内参和外参加载，图像解压，位置变换，关键帧处理等
     """
 
-    def __init__(self, cfg, dualmap:Dualmap):
+    def __init__(self, cfg, dualmap: Dualmap):
         self.cfg = cfg
         self.dualmap = dualmap
         self.logger = logging.getLogger(__name__)
@@ -83,7 +84,11 @@ class RunnerROSBase:
             ]
         )
         Rz = np.array(
-            [[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]]
+            [
+                [np.cos(yaw), -np.sin(yaw), 0],
+                [np.sin(yaw), np.cos(yaw), 0],
+                [0, 0, 1],
+            ]
         )
 
         R_combined = Rz @ Ry @ Rx
@@ -113,7 +118,9 @@ class RunnerROSBase:
 
     def push_data(self, rgb_img, depth_img, pose, timestamp):
         """Push synchronized input data into queue for processing."""
-        transformed_pose = self.create_world_transform() @ (pose @ self.extrinsics)
+        transformed_pose = self.create_world_transform() @ (
+            pose @ self.extrinsics
+        )
 
         data_input = DataInput(
             idx=self.kf_idx,
@@ -148,12 +155,13 @@ class RunnerROSBase:
                     return
 
         # 判断一下，如果不是关键帧的话也跳过
-        if not self.dualmap.check_keyframe(data_input.time_stamp, data_input.pose):
+        if not self.dualmap.check_keyframe(
+            data_input.time_stamp, data_input.pose
+        ):
             return
 
         # 得到对于dualmap, 这是第几个关键帧
         data_input.idx = self.dualmap.get_keyframe_idx()
-        
 
         self.logger.info(
             "[Main] ============================================================"

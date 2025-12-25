@@ -8,7 +8,9 @@ import numpy as np
 from omegaconf import DictConfig, OmegaConf
 
 
-@hydra.main(version_base=None, config_path="../config/", config_name="base_config")
+@hydra.main(
+    version_base=None, config_path="../config/", config_name="base_config"
+)
 def main(cfg: DictConfig):
 
     print(
@@ -17,7 +19,9 @@ def main(cfg: DictConfig):
 
     # Generate output path
     classes_info_path = os.path.join(
-        cfg.output_path, str(cfg.dataset_name) + "_" + str(cfg.scene_id), "classes_info"
+        cfg.output_path,
+        str(cfg.dataset_name) + "_" + str(cfg.scene_id),
+        "classes_info",
     )
     os.makedirs(classes_info_path, exist_ok=True)
 
@@ -31,7 +35,9 @@ def main(cfg: DictConfig):
         semantic_info = json.load(f)
 
     # Get Dict: class id --> names
-    class_id_names = {obj["id"]: obj["name"] for obj in semantic_info["classes"]}
+    class_id_names = {
+        obj["id"]: obj["name"] for obj in semantic_info["classes"]
+    }
     class_id_names = {0: "background", **class_id_names}
 
     # Get Dict: class id --> colors
@@ -61,7 +67,8 @@ def main(cfg: DictConfig):
     # Save names --> colors .json
     # get path
     names_colors_path = os.path.join(
-        classes_info_path, f"{cfg.dataset_name}_{cfg.scene_id}_names_colors.json"
+        classes_info_path,
+        f"{cfg.dataset_name}_{cfg.scene_id}_names_colors.json",
     )
     print(names_colors_path)
     with open(names_colors_path, "w") as f:

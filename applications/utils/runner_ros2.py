@@ -1,6 +1,7 @@
 # runner_ros2.py
 
 import logging
+
 # import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -28,7 +29,9 @@ class RunnerROS2(Node, RunnerROSBase):
 
     def __init__(self, cfg):
         Node.__init__(self, "runner_ros")
-        setup_logging(output_path=cfg.output_path, config_path=cfg.logging_config)
+        setup_logging(
+            output_path=cfg.output_path, config_path=cfg.logging_config
+        )
         self.logger = logging.getLogger(__name__)
         self.logger.info("[Runner ROS2]")
         self.logger.info(OmegaConf.to_yaml(cfg))
@@ -54,10 +57,16 @@ class RunnerROS2(Node, RunnerROSBase):
             )
         else:
             self.logger.warning("[Main] Using uncompressed topics.")
-            self.rgb_sub = Subscriber(self, Image, self.dataset_cfg.ros_topics.rgb)
-            self.depth_sub = Subscriber(self, Image, self.dataset_cfg.ros_topics.depth)
+            self.rgb_sub = Subscriber(
+                self, Image, self.dataset_cfg.ros_topics.rgb
+            )
+            self.depth_sub = Subscriber(
+                self, Image, self.dataset_cfg.ros_topics.depth
+            )
 
-        self.odom_sub = Subscriber(self, Odometry, self.dataset_cfg.ros_topics.odom)
+        self.odom_sub = Subscriber(
+            self, Odometry, self.dataset_cfg.ros_topics.odom
+        )
 
         # Sync messages
         # 三个消息的同步触发回调，三个消息的容差为0.1s
@@ -85,14 +94,20 @@ class RunnerROS2(Node, RunnerROSBase):
 
     def synced_callback(self, rgb_msg, depth_msg, odom_msg):
         """Callback for synced RGB-D-Odom input."""
-        timestamp = rgb_msg.header.stamp.sec + rgb_msg.header.stamp.nanosec * 1e-9
+        timestamp = (
+            rgb_msg.header.stamp.sec + rgb_msg.header.stamp.nanosec * 1e-9
+        )
 
         if self.cfg.use_compressed_topic:
             rgb_img = self.decompress_image(rgb_msg.data, is_depth=False)
             depth_img = self.decompress_image(depth_msg.data, is_depth=True)
         else:
-            rgb_img = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding="rgb8")
-            depth_img = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="16UC1")
+            rgb_img = self.bridge.imgmsg_to_cv2(
+                rgb_msg, desired_encoding="rgb8"
+            )
+            depth_img = self.bridge.imgmsg_to_cv2(
+                depth_msg, desired_encoding="16UC1"
+            )
 
         depth_factor = getattr(self.dataset_cfg, 'depth_factor', 1000.0)
         depth_img = depth_img.astype(np.float32) / depth_factor
@@ -144,16 +159,20 @@ class RunnerROS2(Node, RunnerROSBase):
         super().destroy_node()
 
 
-def run_ros2(cfg): 
+def run_ros2(cfg):
     """Entry point for launching ROS2 runner."""
     rclpy.init()
     runner = RunnerROS2(cfg)
-    runner.logger.warning("[Main] ROS2 Runner started. Waiting for data stream...")
+    runner.logger.warning(
+        "[Main] ROS2 Runner started. Waiting for data stream..."
+    )
     try:
         while rclpy.ok() and not runner.shutdown_requested:
             rclpy.spin_once(runner, timeout_sec=0.1)
     except KeyboardInterrupt:
-        runner.logger.warning("[Main] KeyboardInterrupt received. Shutting down.")
+        runner.logger.warning(
+            "[Main] KeyboardInterrupt received. Shutting down."
+        )
     finally:
         runner.destroy_node()
         rclpy.shutdown()

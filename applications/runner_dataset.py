@@ -14,7 +14,9 @@ from utils.time_utils import timing_context
 from utils.types import DataInput
 
 
-@hydra.main(version_base=None, config_path="../config/", config_name="runner_dataset")
+@hydra.main(
+    version_base=None, config_path="../config/", config_name="runner_dataset"
+)
 def main(cfg: DictConfig):
     # Set up the logging system
     setup_logging(output_path=cfg.output_path, config_path=cfg.logging_config)

@@ -17,7 +17,9 @@ def detect_ros_version():
         return None
 
 
-@hydra.main(version_base=None, config_path="../config/", config_name="runner_ros")
+@hydra.main(
+    version_base=None, config_path="../config/", config_name="runner_ros"
+)
 def main(cfg: DictConfig):
     setup_logging(output_path=cfg.output_path, config_path=cfg.logging_config)
     logger = logging.getLogger(__name__)
@@ -25,13 +27,17 @@ def main(cfg: DictConfig):
     ros_version = detect_ros_version()
 
     if ros_version == "ros1":
-        logger.warning("[runner_ros] Detected ROS1 environment. Running ROS1 runner.")
+        logger.warning(
+            "[runner_ros] Detected ROS1 environment. Running ROS1 runner."
+        )
         from applications.utils.runner_ros1 import run_ros1
 
         run_ros1(cfg)
 
     elif ros_version == "ros2":
-        logger.warning("[runner_ros] Detected ROS2 environment. Running ROS2 runner.")
+        logger.warning(
+            "[runner_ros] Detected ROS2 environment. Running ROS2 runner."
+        )
         from applications.utils.runner_ros2 import run_ros2
 
         run_ros2(cfg)
