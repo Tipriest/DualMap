@@ -234,6 +234,7 @@ class GlobalMapManager(BaseMapManager):
 
         # Get .pkl files in directory
         pkl_files = [file for file in os.listdir(load_dir) if file.endswith(".pkl")]
+        pkl_files.sort()
 
         # Skip loading if no .pkl files
         if not pkl_files:
