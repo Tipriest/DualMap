@@ -9,6 +9,7 @@ import time
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
+import re
 
 class TaskPublisher(Node):
     def __init__(self):
@@ -89,8 +90,8 @@ def task_extract():
         # 提取回答内容
         if "choices" in result and result["choices"]:
             content = result["choices"][0]["message"]["content"]
-            print("模型回答:")
-            print(content)
+            # print("模型回答:")
+            # print(content)
         else:
             print("完整响应:")
             print(json.dumps(result, indent=2))
@@ -101,9 +102,37 @@ def task_extract():
 
     end_time = time.time()
     print("cost time", end_time-start_time)
+    
 
-    target_name = content["target_object"]
-    avoid_hazard = content["avoid_object"]
+    # 解析JSON
+    try:
+        content_dict = json.loads(content)
+    except json.JSONDecodeError:
+        # 如果失败，尝试从文本中提取 JSON 部分
+        # 查找 {...} 格式的 JSON
+        json_match = re.search(r'\{[^{}]*\}', content)
+        if json_match:
+            json_str = json_match.group()
+            content_dict = json.loads(json_str)
+        else:
+            # 如果没有找到 JSON，尝试提取键值对
+            content_dict = {}
+            # 查找 target_object
+            target_match = re.search(r'"target_object":\s*"([^"]+)"', content)
+            if target_match:
+                content_dict["target_object"] = target_match.group(1)
+            
+            # 查找 avoid_object
+            avoid_match = re.search(r'"avoid_object":\s*"([^"]+)"', content)
+            if avoid_match:
+                content_dict["avoid_object"] = avoid_match.group(1)
+            elif '"avoid_object":\s*"None"' in content or '"avoid_object":\s*null' in content:
+                content_dict["avoid_object"] = "None"
+        
+        # 现在可以安全访问字典了
+        target_name = content_dict.get("target_object", "None")
+        avoid_hazard = content_dict.get("avoid_object", "None")
+
     
     task_pub.publish_task(target_name)
     task_pub.publish_hazard(avoid_hazard)
