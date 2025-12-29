@@ -274,16 +274,16 @@ class Detector:
         """设置数据输入，并在后台线程中处理它。"""
         self.curr_data = curr_data
 
-        if not self.cfg.preload_layout:
-            # If a thread is already running, wait for it to finish(如果已有线程在运行，阻塞并等待它完成)
-            if self.data_thread and self.data_thread.is_alive():
-                self.data_thread.join()
+        # if not self.cfg.preload_layout:
+        # If a thread is already running, wait for it to finish(如果已有线程在运行，阻塞并等待它完成)
+        if self.data_thread and self.data_thread.is_alive():
+            self.data_thread.join()
 
-            # Create a new thread to process data input(创建一个新线程来处理数据输入)
-            self.data_thread = threading.Thread(
-                target=self._process_data_input_thread
-            )
-            self.data_thread.start()
+        # Create a new thread to process data input(创建一个新线程来处理数据输入)
+        self.data_thread = threading.Thread(
+            target=self._process_data_input_thread
+        )
+        self.data_thread.start()
 
     def _process_data_input_thread(self):
         """_summary_

@@ -57,6 +57,9 @@ class LayoutMap:
         """
         points = np.asarray(self.point_cloud.points)
         xy_points = points[:, :2]
+        # print(f"len(xy_points) = {len(xy_points)}")
+        if(0 == len(xy_points)):
+            print("[create_occupancy_map]: len(xy_points) = 0, return")
         x_min, y_min = np.min(xy_points, axis=0)
         x_max, y_max = np.max(xy_points, axis=0)
 
