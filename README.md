@@ -31,7 +31,9 @@
 - 检测如何提高准确率
   - YOLO的标签可以变得少一点，试一下效果
   - 增训一下YOLO，有增训YOLO的流程
-  - 换一下YOLO v8s,用唐立说的大模型DINO来做,会爆显存，可能要调用API modelscope Qwen
+  - 换一下YOLO v8s,用唐立说的大模型DINO来做,会爆显存，可能要调用API modelscope Qwen Yolo的Open Vocabulary系列模型其实也不知有yolo v8 和yoloe，其实还有更多种类的Yolo的模型
+  - 后面的提取mask其实可以不使用mobilesam，而是直接使用yolo-seg分割得到的结果
+  - 
 
 
 
