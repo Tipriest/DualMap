@@ -33,7 +33,7 @@
   - 增训一下YOLO，有增训YOLO的流程
   - 换一下YOLO v8s,用唐立说的大模型DINO来做,会爆显存，可能要调用API modelscope Qwen Yolo的Open Vocabulary系列模型其实也不知有yolo v8 和yoloe，其实还有更多种类的Yolo的模型
   - 后面的提取mask其实可以不使用mobilesam，而是直接使用yolo-seg分割得到的结果
-  - 
+  - rerun上加一个堆栈的图片，显示一下现在的生产-消费者模式的存储队列剩下的内容的数量，可视化的显示一下
 
 
 
