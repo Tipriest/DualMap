@@ -898,7 +898,11 @@ class Detector:
                 fastsam_thread.start()
 
             # Run YOLO and SAM, 获得self.curr_detections
-            self.process_yolo_without_sam(color)
+            yolo_name:str = self.cfg.yolo.model_path.split('/')[-1]
+            if yolo_name == "yolov8l-world.pt":
+                self.process_yolo_and_sam(color)
+            elif yolo_name == "yoloe-v8l-seg.pt":
+                self.process_yolo_without_sam(color)
 
             # Waiting for FastSAM to finish
             if self.cfg.use_fastsam:
