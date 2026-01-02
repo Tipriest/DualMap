@@ -54,7 +54,7 @@ class Dualmap:
         # Additional initialization for visualization
         self.visualizer.set_use_rerun(cfg.use_rerun)
         self.visualizer.init("refactor_mapping")
-        self.visualizer.spawn()
+        self.visualizer.connect_tcp("192.168.2.2:9876")
 
         # Keyframe Selection
         self.curr_frame_id: int = 0
