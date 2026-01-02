@@ -1,0 +1,59 @@
+wall
+unknown
+picture
+ceiling
+pillow
+door
+lamp
+floor
+window
+book
+chair
+shelf
+table
+curtain
+towel
+painting
+bag
+shoe
+plant
+clothes
+stairs
+bed
+toy
+rug
+toilet paper
+tv
+carpet
+stool
+trashcan
+plate
+clock
+flower vase
+cup
+bathtub
+flower
+coffee table
+sofa
+telephone
+art frame
+bed table
+keyboard
+printer
+air conditioner
+ceiling wall
+wall board
+remote control
+vacuum cleaner
+broom
+laptop
+dining table
+tv stand
+fire extinguisher
+fridge
+laundry machine
+jewelry
+ball
+kitchen shelf
+radio
+computer mouse

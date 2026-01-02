@@ -189,8 +189,14 @@ class Detector:
                 logger.info(
                     f"[Detector][Init] Loading YOLO model from\t{cfg.yolo.model_path}"
                 )
-                self.yolo: YOLO = YOLO(cfg.yolo.model_path)
-                self.yolo.set_classes(self.obj_classes.get_classes_arr())
+                yolo_name:str = cfg.yolo.model_path.split('/')[-1]
+                if yolo_name == "yolov8l-world.pt":
+                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
+                    self.yolo.set_classes(self.obj_classes.get_classes_arr())
+                elif yolo_name == "yoloe-v8l-seg.pt":
+                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
+                    names = self.obj_classes.get_classes_arr()
+                    self.yolo.set_classes(names, self.yolo.get_text_pe(names))
             except Exception as e:
                 logger.error(f"[Detector][Init] Error loading YOLO model: {e}")
                 return
@@ -591,6 +597,8 @@ class Detector:
         # if detection is empty, return(如果检测为空，则返回)
         if len(confidence) == 0:
             logger.warning("[Detector] 当前帧中未找到任何检测。")
+            # 确保本帧不再使用上一帧的检测
+            self.curr_detections = None
             # 将当前结果设置为空字典
             self.curr_results = {}
             return
@@ -609,6 +617,41 @@ class Detector:
 
         self.curr_detections = curr_detections
 
+    def process_yolo_without_sam(self, color):
+        """_summary_
+            运行yolo和sam, 得到待检测物体的边界框点, 检测置信度, 类别id, masks
+        Args:
+            color (_type_): _description_
+        """
+        with timing_context("YOLO", self):
+            (
+                confidence,
+                class_id,
+                class_labels,
+                xyxy,
+                masks_np_yolo,
+            ) = self.process_yolo_results_with_masks(color, self.obj_classes)
+
+        # if detection is empty, return(如果检测为空，则返回)
+        if len(confidence) == 0:
+            logger.warning("[Detector] 当前帧中未找到任何检测。")
+            # 确保本帧不再使用上一帧的检测
+            self.curr_detections = None
+            self.curr_results = {}
+            return
+
+        # 直接使用YOLO的分割结果（已在process_yolo_results_with_masks中resize到原图尺寸）
+        self.masks_np = masks_np_yolo
+
+        curr_detections = sv.Detections(
+            xyxy=xyxy,
+            confidence=confidence,
+            class_id=class_id,
+            mask=self.masks_np,
+        )
+
+        self.curr_detections = curr_detections
+
     def process_yolo_results(self, color, obj_classes):
         """_summary_
 
@@ -621,10 +664,12 @@ class Detector:
             detection_class_id_np: 类别id
             detection_class_labels: 类别标签
             xyxy_np: 边界框坐标
+            masks: mask
         """
 
         # Perform YOLO prediction(执行YOLO预测)
-        results = self.yolo.predict(color, conf=0.2, verbose=False)
+
+        results = self.yolo.predict([color], conf=0.5, verbose=False)
 
         # Extract confidence scores(提取置信度分数)
         confidence_tensor = results[0].boxes.conf
@@ -651,6 +696,73 @@ class Detector:
             detection_class_id_np,
             detection_class_labels,
             xyxy_np,
+        )
+
+    def process_yolo_results_with_masks(self, color, obj_classes):
+        """运行YOLO并返回bbox和已经resize到原图尺寸的mask。"""
+        # Perform YOLO prediction(执行YOLO预测)
+        results = self.yolo.predict([color], conf=0.5, verbose=False)
+
+        # Extract confidence scores(提取置信度分数)
+        confidence_tensor = results[0].boxes.conf
+        confidence_np = confidence_tensor.cpu().numpy()
+
+        # Extract class IDs(提取类别ID)
+        detection_class_id_tensor = results[0].boxes.cls
+        detection_class_id_np = (
+            detection_class_id_tensor.cpu().numpy().astype(int)
+        )
+
+        # Generate class labels(生成类别标签)
+        detection_class_labels = [
+            f"{obj_classes.get_classes_arr()[class_id]} {class_idx}"
+            for class_idx, class_id in enumerate(detection_class_id_np)
+        ]
+
+        # Extract bounding box coordinates(提取边界框坐标)
+        xyxy_tensor = results[0].boxes.xyxy
+        xyxy_np = xyxy_tensor.cpu().numpy()
+
+        # ----- 关键部分：把YOLO输出的mask resize到原图尺寸 -----
+        if(None is results[0].masks):
+            print("results[0].masks is None")
+            return (
+                confidence_np,
+                detection_class_id_np,
+                detection_class_labels,
+                xyxy_np,
+                None,
+            )
+        masks_tensor = results[0].masks.data  # (N, h_mask, w_mask)
+        masks_np_raw = masks_tensor.cpu().numpy()  # float32, 0/1
+
+        orig_h, orig_w = color.shape[:2]
+        n_masks, h_mask, w_mask = masks_np_raw.shape
+
+        if (h_mask, w_mask) != (orig_h, orig_w):
+            resized_masks = np.zeros(
+                (n_masks, orig_h, orig_w), dtype=bool
+            )
+            for i in range(n_masks):
+                # 使用最近邻插值避免引入非0/1值
+                resized = cv2.resize(
+                    masks_np_raw[i].astype(np.uint8),
+                    (orig_w, orig_h),
+                    interpolation=cv2.INTER_NEAREST,
+                )
+                resized_masks[i] = resized.astype(bool)
+            masks_np = resized_masks
+        else:
+            # 已经和原图同尺寸
+            masks_np = masks_np_raw.astype(bool)
+        # --------------------------------------------------
+
+        return (
+            confidence_np,
+            detection_class_id_np,
+            detection_class_labels,
+            xyxy_np,
+            masks_np,
         )
 
     def filter_fs_detections_by_curr(
@@ -786,27 +898,45 @@ class Detector:
                 fastsam_thread.start()
 
             # Run YOLO and SAM, 获得self.curr_detections
-            self.process_yolo_and_sam(color)
+            self.process_yolo_without_sam(color)
 
             # Waiting for FastSAM to finish
             if self.cfg.use_fastsam:
                 fastsam_thread.join()
+
+        # 如果YOLO没有产生有效检测，直接返回
+        if (
+            not hasattr(self, "curr_detections")
+            or self.curr_detections is None
+            or len(self.curr_detections) == 0
+        ):
+            logger.warning(
+                "[Detector] YOLO+Segmentation 后没有有效检测结果，跳过本帧。"
+            )
+            self.curr_results = {}
+            return
 
         # 过滤一些detections
         with timing_context("Detection Filter", self):
             self.filter.update_detections(self.curr_detections, color)
             filtered_detections = self.filter.run_filter()
 
-        if self.filter.get_len() == 0:
-            logger.warning("[Detector] 过滤后当前帧中没有有效的检测结果。")
+        # run_filter 可能返回 None 或 0 个检测
+        if filtered_detections is None or self.filter.get_len() == 0:
+            logger.warning(
+                "[Detector] 过滤后当前帧中没有有效的检测结果。"
+            )
             self.curr_results = {}
             return
 
         # add extra detections from FastSAM results
-        # if no detection from fastsam, just skip
-        # 从FastSAM结果中添加额外的检测
         # 如果fastsam没有检测结果，则跳过
-        if self.cfg.use_fastsam and self.fastsam_detections:
+        if (
+            self.cfg.use_fastsam
+            and hasattr(self, "fastsam_detections")
+            and isinstance(self.fastsam_detections, sv.Detections)
+            and len(self.fastsam_detections) > 0
+        ):
             filtered_detections = self.add_extra_detections_from_fastsam(
                 color, self.fastsam_detections, filtered_detections
             )

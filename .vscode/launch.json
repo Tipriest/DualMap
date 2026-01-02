@@ -36,7 +36,7 @@
       "name": "Debug applications.runner_ros",
       "type": "python",
       "request": "launch",
-
+      "justMyCode": false,
       // 关键点： 用 module 模式，而不是 program
       "module": "applications.runner_ros",
 
