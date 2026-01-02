@@ -54,7 +54,14 @@ class Dualmap:
         # Additional initialization for visualization
         self.visualizer.set_use_rerun(cfg.use_rerun)
         self.visualizer.init("refactor_mapping")
-        self.visualizer.connect_tcp("192.168.2.2:9876")
+        if self.cfg.use_tcp:
+            print(
+                f"use tcp connect to show rerun info: tcp address is {self.cfg.tcp_address}"
+            )
+            self.visualizer.connect_tcp("192.168.2.2:9876")
+        else:
+            print("directly spawn rerun visualizer instance on local computer")
+            self.visualizer.spawn()
 
         # Keyframe Selection
         self.curr_frame_id: int = 0
