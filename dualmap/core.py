@@ -58,7 +58,7 @@ class Dualmap:
             print(
                 f"use tcp connect to show rerun info: tcp address is {self.cfg.tcp_address}"
             )
-            self.visualizer.connect_tcp("192.168.2.2:9876")
+            self.visualizer.connect_tcp(self.cfg.tcp_address)
         else:
             print("directly spawn rerun visualizer instance on local computer")
             self.visualizer.spawn()
