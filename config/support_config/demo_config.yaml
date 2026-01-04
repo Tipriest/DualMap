@@ -4,7 +4,7 @@
 # Disable other visualization
 # for debug visualization
 # if you need debuging in rerun, open this. This will give you plenty of debug information
-show_debug_entities: false
+show_debug_entities: True
 # set false for long time data collecting, because the long run rerun will have lag
 #  https://github.com/rerun-io/rerun/issues/7678
 show_local_entities: True
