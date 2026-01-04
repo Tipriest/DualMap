@@ -81,19 +81,11 @@ class RunnerROS1(RunnerROSBase):
             rgb_img = self.decompress_image(rgb_msg.data, is_depth=False)
             depth_img = self.decompress_image(depth_msg.data, is_depth=True)
         else:
-            rgb_img = self.bridge.imgmsg_to_cv2(
-                rgb_msg, desired_encoding="rgb8"
-            )
-            depth_img = self.bridge.imgmsg_to_cv2(
-                depth_msg, desired_encoding="16UC1"
-            )
-
-        # Ensure resolution is 720 x 1280
-        rgb_img, depth_img = self.ensure_resolution(rgb_img, depth_img)
+            rgb_img = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding="rgb8")
+            depth_img = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="passthrough")
 
         depth_factor = getattr(self.dataset_cfg, 'depth_factor', 1000.0)
-        depth_img = depth_img.astype(np.float32) / depth_factor
-        depth_img = np.expand_dims(depth_img, axis=-1)
+        depth_img = self.process_depth_image(depth_img, depth_factor)
 
         translation = np.array(
             [
