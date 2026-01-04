@@ -57,3 +57,6 @@ ball
 kitchen shelf
 radio
 computer mouse
+box
+toilet
+bottle
