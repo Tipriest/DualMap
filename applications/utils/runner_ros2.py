@@ -109,6 +109,9 @@ class RunnerROS2(Node, RunnerROSBase):
                 depth_msg, desired_encoding="16UC1"
             )
 
+        # Ensure resolution is 720 x 1280
+        rgb_img, depth_img = self.ensure_resolution(rgb_img, depth_img)
+
         depth_factor = getattr(self.dataset_cfg, 'depth_factor', 1000.0)
         depth_img = depth_img.astype(np.float32) / depth_factor
         depth_img = np.expand_dims(depth_img, axis=-1)

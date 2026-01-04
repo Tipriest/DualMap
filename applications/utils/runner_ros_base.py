@@ -108,6 +108,37 @@ class RunnerROSBase:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         return img
 
+    def ensure_resolution(self, rgb_img, depth_img, target_h=720, target_w=1280):
+        """
+        Ensure RGB and depth images are resized to (target_h, target_w).
+        如果分辨率不是 target_h x target_w，则缩放到对应大小。
+        """
+        # RGB: H x W x 3
+        if rgb_img is not None:
+            h, w = rgb_img.shape[:2]
+            if (h, w) != (target_h, target_w):
+                rgb_img = cv2.resize(
+                    rgb_img,
+                    (target_w, target_h),
+                    interpolation=cv2.INTER_LINEAR,
+                )
+
+        # Depth: H x W or H x W x 1
+        if depth_img is not None:
+            if depth_img.ndim == 3:
+                h_d, w_d = depth_img.shape[:2]
+            else:
+                h_d, w_d = depth_img.shape
+            if (h_d, w_d) != (target_h, target_w):
+                depth_resized = cv2.resize(
+                    depth_img,
+                    (target_w, target_h),
+                    interpolation=cv2.INTER_NEAREST,
+                )
+                depth_img = depth_resized
+
+        return rgb_img, depth_img
+
     def build_pose_matrix(self, translation, quaternion):
         """Construct 4x4 pose matrix from translation and quaternion."""
         rotation_matrix = R.from_quat(quaternion).as_matrix()
