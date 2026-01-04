@@ -544,7 +544,10 @@ class Dualmap:
     def run_mapping_thread(self):
         """
         其实这里就是拿一下parallel_process处理结果的observations,
-        然后运行local_mapping和global_mapping把observations变换为local_object和global_object, 在local_object中进行匹配, 取出低移动性的物体的observation传入到global_mapping中
+        然后运行local_mapping和global_mapping:
+        把observations变换为local_object和global_object,
+        在local_object中进行匹配,
+        取出低移动性的物体的observation传入到global_mapping中
         """
         while not self.stop_thread:
             try:
@@ -665,7 +668,7 @@ class Dualmap:
         for i in range(end_range):
             # Set timestamp for visualizer
             logger.info(
-                "[Core][EndProcess] End Counter: %d", end_frame_id + i + 1
+                f"[Core][EndProcess] End Counter: {end_frame_id + i + 1}",
             )
             self.visualizer.set_time_sequence("frame", end_frame_id + i + 1)
 
@@ -675,7 +678,7 @@ class Dualmap:
             self.local_map_manager.end_process()
             local_map_obj_num = len(self.local_map_manager.local_map)
             logger.info(
-                "[Core][EndProcess] Local Objects num: %d", local_map_obj_num
+                f"[Core][EndProcess] Local Objects num: {local_map_obj_num}"
             )
 
             # global process
@@ -684,15 +687,14 @@ class Dualmap:
             self.global_map_manager.process_observations(global_obs_list)
             global_map_obj_num = len(self.global_map_manager.global_map)
             logger.info(
-                "[Core][EndProcess] Global Objects num: %d", global_map_obj_num
+                f"[Core][EndProcess] Global Objects num: {global_map_obj_num}"
             )
 
             # 提前退出机制:
             # 当局部地图中没有待处理对象的时候，说明所有数据已经处理完毕，可以提前结束
             if local_map_obj_num == 0:
                 logger.warning(
-                    "[EndProcess] End Processing End. to: %d",
-                    end_frame_id + i + 1,
+                    f"[EndProcess] End Processing End. to: {end_frame_id + i + 1}"
                 )
                 break
 
