@@ -148,11 +148,15 @@ DualMap 支持从 iPhone 上的 **Record3D** 应用进行**实时数据流传输
 如果您觉得我们的工作有帮助，请考虑为本仓库点星 🌟 并引用：
 
 ```bibtex
-@article{jiang2025dualmap,
-  title={DualMap: Online Open-Vocabulary Semantic Mapping for Natural Language Navigation in Dynamic Changing Scenes},
+@ARTICLE{jiang2025dualmap,
   author={Jiang, Jiajun and Zhu, Yiming and Wu, Zirui and Song, Jie},
-  journal={arXiv preprint arXiv:2506.01950},
-  year={2025}
+  journal={IEEE Robotics and Automation Letters},
+  title={DualMap: Online Open-Vocabulary Semantic Mapping for Natural Language Navigation in Dynamic Changing Scenes},
+  year={2025},
+  volume={10},
+  number={12},
+  pages={12612--12619},
+  doi={10.1109/LRA.2025.3621942}
 }
 ```
 

@@ -94,26 +94,24 @@ class ReRunVisualizer:
                     return func(*args, **kwargs)
                 else:
                     logger.warning(
-                        "[Visualizar] '%s' is not a valid rerun method.", name
+                        f"[Visualizar] '{name}' is not a valid rerun method."
                     )
             else:
                 if not self._use_rerun:
                     logger.info(
-                        "[Visualizar] Skipping optional rerun call to '%s'"
-                        "because rerun usage is disabled.",
-                        name,
+                        f"[Visualizar] Skipping optional rerun call to {name}"
+                        "because rerun usage is disabled."
                     )
                 elif self._rerun is None:
                     logger.info(
-                        "[Visualizar] Skipping optional rerun call to '%s'"
-                        " because rerun is not installed.",
-                        name,
+                        f"[Visualizar] Skipping optional rerun call to {name}"
+                        " because rerun is not installed."
                     )
 
         return method
 
-    def fordebug(self):
-        self._rerun.set_time_sequence()
+    # def fordebug(self):
+    #     self._rerun.set_time_sequence()
 
     def update_intrinsic(self, intrinsic, force=False):
         if self._intrinsic_initialized and not force:

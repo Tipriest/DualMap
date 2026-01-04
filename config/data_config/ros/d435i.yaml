@@ -1,0 +1,16 @@
+dataset_name: 'd435i'
+
+ros_topics:
+  rgb: "/camera/camera/color/image_raw"
+  depth: "/camera/camera/depth/image_rect_raw"
+  odom: "/camera/pose"
+  camera_info: "/camera/camera/color/camera_info"
+
+# Depth factor for converting depth values from millimeters to meters
+depth_factor: 1000.0
+
+intrinsic:
+  fx: 647.2557373046875
+  fy: 647.2557373046875
+  cx: 648.618896484375
+  cy: 356.91217041015625

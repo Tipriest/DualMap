@@ -1,0 +1,16 @@
+dataset_name: 'd435i'
+
+ros_topics:
+  rgb: "/zed/zed_node/rgb/color/rect/image"
+  depth: "/zed/zed_node/depth/depth_registered"
+  odom: "/camera/pose"
+  camera_info: "/zed/zed_node/depth/camera_info"
+
+# Depth factor for converting depth values from millimeters to meters
+depth_factor: 1.0
+
+intrinsic:
+  fx: 525.904052734375
+  fy: 525.904052734375
+  cx: 475.28778076171875
+  cy: 267.37445068359375
