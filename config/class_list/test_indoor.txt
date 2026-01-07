@@ -4,7 +4,6 @@ picture
 ceiling
 pillow
 door
-lamp
 floor
 window
 book
@@ -33,11 +32,9 @@ flower vase
 cup
 bathtub
 flower
-coffee table
 sofa
 telephone
 art frame
-bed table
 keyboard
 printer
 air conditioner
