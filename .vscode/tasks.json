@@ -139,7 +139,6 @@
       },
       "problemMatcher": []
     },
-
     {
       "label": "debug-dualmap-dataset",
       "type": "shell",

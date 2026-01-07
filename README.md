@@ -52,27 +52,27 @@
 
 
 
-## 构建结果
-#### 1. layout.pcd文件
-![alt text](assets/layout.png)
-#### 2. wall.pcd文件
-![alt text](assets/wall.png)
+
+
+## 二. 加载结果
+#### 2.1 理论上的加载结果
+![alt text](assets/intro.png)
 
 
 
-## 安装
+## 三. 安装
 
 > 已在 **Ubuntu 22.04** + **ROS 2 Humble** + **Python 3.10** 上测试通过
 
-#### 1. 克隆仓库（包含子模块）
+#### 3.1 克隆仓库（包含子模块）
 
 ```bash
-git clone --branch main --single-branch --recurse-submodules git@github.com:Tipriest/DualMap.git
+git clone --branch feat/search_only --single-branch --recurse-submodules git@github.com:Tipriest/DualMap.git
 cd DualMap
 ```
 
 
-#### 2. 创建 Conda 环境
+#### 3.2 创建 Conda 环境
 ```bash
 conda env create -f environment.yml
 conda activate dualmap
@@ -82,31 +82,18 @@ conda install openssl=3.0.13  # Ubuntu 22.04 常用版本
 conda install libcurl
 ```
 
-#### 3. 安装 MobileCLIP(以后可以安装clip v2)
+#### 3.3 安装 MobileCLIP(以后可以安装clip v2)
 ```bash
 cd 3rdparty/mobileclip
 pip install -e . --no-deps
 cd ../..
 ```
 
-## 应用
-
-以下是每种应用类型的需求快速概览：
-
-| 应用 | Conda 环境  | ROS2 | Habitat Data Collector |
-| :--- | :---: | :---: | :---: |
-| 数据集 / 查询 / iPhone | ✓  | | |
-| ROS（离线/在线） | ✓ | ✓ | |
-| 在线仿真（建图+导航） | ✓ | ✓ | ✓ |
 
 
-### 💾 使用数据集运行
+## 四. 数据集设置
 
-DualMap 支持使用**离线数据集**运行。当前支持的数据集包括：
-1. Replica 数据集
-2. ScanNet 数据集
-3. TUM RGB-D 数据集
-4. 使用 [Habitat Data Collector](https://github.com/Eku127/habitat-data-collector) 自行采集的数据
+在运行工具之前，请按照 [数据集设置指南](docs/dataset_netdisk.md) 准备所需的数据集。
 
 对于从您自己的平台采集的数据，您可以按类似格式组织以运行系统。
 

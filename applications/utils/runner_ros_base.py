@@ -248,6 +248,8 @@ class RunnerROSBase:
         self.logger.info(
             "[Main] ============================================================"
         )
+        if self.cfg.only_for_seacrch:
+            return
         with timing_context("Time Per Frame", self.dualmap):
             if self.cfg.use_parallel:
                 self.dualmap.parallel_process(data_input)

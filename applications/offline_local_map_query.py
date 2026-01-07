@@ -1,207 +1,248 @@
-import copy
-import json
+"""
+Docstring for applications.offline_local_map_query
+dualmap 主机端执行，订阅目标物体名称，基于离线构建的local map进行目标位置查询
+发布目标位置，避障物包围盒
+"""
+
 import os
+
+os.environ["DISPLAY"] = ""
 import sys
 
-import hydra
-import matplotlib
+import yaml
 import numpy as np
-import open3d as o3d
 import open_clip
 import torch
 import torch.nn.functional as F
-from omegaconf import DictConfig, OmegaConf
+
+sys.path.append("/home/tipriest/Documents/DualMap/3rdparty")
 
 from utils.object import BaseObject
+from mobileclip.modules.common.mobileone import reparameterize_model
+
+import rclpy
+from rclpy.action import ActionClient
+from rclpy.node import Node
+from std_msgs.msg import Float64MultiArray, String
+from geometry_msgs.msg import PoseStamped
+from nav2_msgs.action import NavigateToPose
+import math
 
 
-@hydra.main(
-    version_base=None, config_path="../config/", config_name="query_config"
-)
-def main(cfg: DictConfig):
+def yaw_to_quaternion(yaw: float):
+    # Assuming roll=pitch=0
+    qz = math.sin(yaw * 0.5)
+    qw = math.cos(yaw * 0.5)
+    return 0.0, 0.0, qz, qw
 
-    ### Loading Color map: class id --> color Dict
-    if cfg.yolo.use_given_classes:
-        given_classes_path = cfg.yolo.given_classes_path
-        dir_path = os.path.dirname(given_classes_path)  # './model'
-        base_name = os.path.basename(
-            given_classes_path
-        )  # 'gpt_indoor_table.txt'
-        file_root, _ = os.path.splitext(base_name)  # 'gpt_indoor_table'
 
-        class_id_colors_path = os.path.join(
-            dir_path, file_root + "_id_colors.json"
+
+class TaskSubscriber(Node):
+    def __init__(self, cfg_path: str):
+        super().__init__("nav2_goal_sender")
+        with open(cfg_path, "r") as f:
+            self.cfg = yaml.safe_load(f)
+        self.subscription = self.create_subscription(String, "target_name", self.get_target_position, 10)
+        self.related_obj_subscription = self.create_subscription(String, "related_object", self.get_related_obj_position, 10)
+        self.hazard_subscription = self.create_subscription(String, "semantic_hazard", self.get_hazard_position, 10)
+
+
+        self._action_name = "/navigate_to_pose"
+        self._client = ActionClient(self, NavigateToPose, self._action_name)
+
+        self.load_dir = None
+        self.target_name = None
+        self.obj_map = None
+
+        self.load_results()
+        self.init_clip()
+
+        # 手动给定目标，测试本地clip部分
+        # self.test_clip_offline("tv")
+        # print("test end!")
+
+    def send_goal(self, x: float, y: float, yaw: float, frame_id: str, wait_timeout: float) -> bool:
+        if not self._client.wait_for_server(timeout_sec=wait_timeout):
+            self.get_logger().error(
+                f"NavigateToPose action server not available: '{self._action_name}'. "
+                f"(waited {wait_timeout}s)"
+            )
+            return False
+
+        goal_msg = NavigateToPose.Goal()
+        goal_msg.pose = PoseStamped()
+        goal_msg.pose.header.frame_id = frame_id
+        goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
+        goal_msg.pose.pose.position.x = float(x)
+        goal_msg.pose.pose.position.y = float(y)
+        qx, qy, qz, qw = yaw_to_quaternion(float(yaw))
+        goal_msg.pose.pose.orientation.x = qx
+        goal_msg.pose.pose.orientation.y = qy
+        goal_msg.pose.pose.orientation.z = qz
+        goal_msg.pose.pose.orientation.w = qw
+
+        self.get_logger().info(
+            f"Sending Nav2 goal to '{self._action_name}': x={x:.3f}, y={y:.3f}, yaw={yaw:.3f} ({frame_id})"
         )
 
-    else:
-        class_id_colors_path = os.path.join(
-            cfg.output_path,
-            f"{cfg.dataset_name}_{cfg.scene_id}",
-            "classes_info",
-            f"{cfg.dataset_name}_{cfg.scene_id}_id_colors.json",
+        send_future = self._client.send_goal_async(goal_msg)
+        rclpy.spin_until_future_complete(self, send_future)
+        goal_handle = send_future.result()
+
+        if goal_handle is None:
+            self.get_logger().error("Failed to send goal (no goal_handle).")
+            return False
+
+        if not goal_handle.accepted:
+            self.get_logger().error("Goal rejected by server.")
+            return False
+
+        self.get_logger().info("Goal accepted. Waiting for result...")
+        result_future = goal_handle.get_result_async()
+        rclpy.spin_until_future_complete(self, result_future)
+        result = result_future.result()
+
+        if result is None:
+            self.get_logger().error("No result returned.")
+            return False
+
+        status = result.status
+        # 4 == SUCCEEDED (action_msgs/msg/GoalStatus)
+        if status == 4:
+            self.get_logger().info("Navigation SUCCEEDED.")
+            return True
+
+        self.get_logger().warn(f"Navigation finished with status={status}.")
+        return False
+
+
+    def load_results(self):
+        ### Loading saved results
+        # if map_dir is not provided, use the default path
+        # FLAG: 移植实机需处理目录
+        # if os.path.exists(self.cfg.test_map_dir):
+        #     load_dir = self.cfg.test_map_dir
+        # else:
+        #     load_dir = os.path.join(
+        #         self.cfg.output_path, f"{self.cfg.dataset_name}_{self.cfg.scene_id}", "map"
+        #     )
+        load_dir = (
+            "/home/tipriest/Documents/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/20251225_210242/global_map"
         )
+        if not os.path.exists(load_dir):
+            print(f"Error: {load_dir} does not exist.")
+            sys.exit(1)
 
-    print("Loading classes id --> colors from: {}".format(class_id_colors_path))
+        print(("Loading saved obj results from: {}".format(load_dir)))
+        self.load_dir = load_dir
 
-    if not os.path.exists(class_id_colors_path):
-        raise FileNotFoundError(
-            f"Error: File not found: {class_id_colors_path}"
+    def init_clip(self):
+        # traverse the .pkl in the directory to get constructed maps
+        obj_map = []
+        for file in os.listdir(self.load_dir):
+            if file.endswith(".pkl"):
+                obj_results_path = os.path.join(self.load_dir, file)
+                # object construction
+                loaded_obj = BaseObject.load_from_disk(obj_results_path)
+                obj_map.append(loaded_obj)
+        print(f"Successfully loaded {len(obj_map)} objects")
+        self.obj_map = obj_map
+
+        ### Init of CLIP
+        print("Loading CLIP model")
+
+        clip_model_name = "MobileCLIP-S2"
+        pretrained = "datacompdr"
+        self.clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
+            clip_model_name, pretrained=pretrained
         )
+        device = "cuda"
+        self.clip_model = self.clip_model.to(device)
+        self.clip_model.eval()
+        # Only reparameterize if the model is MobileCLIP
+        # if "MobileCLIP" in self.cfg.clip.model_name:
+        print("==> Opening mobileclip")
+        self.clip_model = reparameterize_model(self.clip_model)
 
-    class_id_colors = {}
-    with open(class_id_colors_path, "r") as file:
-        class_id_colors = json.load(file)
-    class_id_colors = {
-        int(key): value for key, value in class_id_colors.items()
-    }
+        self.clip_tokenizer = open_clip.get_tokenizer(clip_model_name)
+        print("Done initializing CLIP model.")
 
-    # Dict: class id --> name
-    class_id_names = {}
+        print(f"Obj Map length: %d" % len(obj_map))
 
-    if cfg.yolo.use_given_classes:
-        class_id_names_path = cfg.yolo.given_classes_path
-        # Load class names from txt
-        with open(class_id_names_path, "r") as f:
-            class_list = [line.strip() for line in f if line.strip()]
-        class_id_names = {i: name for i, name in enumerate(class_list)}
-    else:
-        class_id_names_path = os.path.join(
-            cfg.output_path,
-            f"{cfg.dataset_name}_{cfg.scene_id}",
-            "classes_info",
-            f"{cfg.dataset_name}_{cfg.scene_id}_id_names.json",
-        )
+    def get_target_position(self, msg):
+        self.target_name = msg.data
+        print(f"Received target name: {self.target_name}")
 
-        with open(class_id_names_path, "r") as file:
-            class_id_names = json.load(file)
-        class_id_names = {
-            int(key): value for key, value in class_id_names.items()
-        }
+        print("==> target object")
 
-    print("Loading classes id --> names  from: {}".format(class_id_names_path))
+        corner_list = self.query_callback(self.target_name)
+        target_position = np.array(corner_list).mean(axis=0)
+        print(f"[query] target position: {target_position}")
+        target_x = target_position[0]
+        target_y = target_position[1]
+        target_yaw = 0.0
+        frame_id = "map"
+        wait_timeout = 5.0
 
-    if not os.path.exists(class_id_names_path):
-        raise FileNotFoundError(f"Error: File not found: {class_id_names_path}")
+        self.send_goal(target_x, target_y, target_yaw, frame_id, wait_timeout)
 
-    ### Loading saved results
-    # if map_dir is not provided, use the default path
-    load_dir = None
-    if os.path.exists(cfg.map_dir):
-        load_dir = cfg.map_dir
-    else:
-        load_dir = os.path.join(
-            cfg.output_path, f"{cfg.dataset_name}_{cfg.scene_id}", "map"
-        )
+        print("==============================")
 
-    if not os.path.exists(load_dir):
-        print(f"Error: {load_dir} does not exist.")
-        sys.exit(1)
+    def test_clip_offline(self, target: str):
+        """
+        手动输入目标测试检索流程
+        """
 
-    print(("Loading saved obj results from: {}".format(load_dir)))
+        print("start offline test!")
+        corner_list = self.query_callback(target)
+        target_position = np.array(corner_list).mean(axis=0)
+        print(f"[query] target position: {target_position}")
 
-    ### Loading viewpoint
-    viewpoint_path = os.path.join(load_dir, "viewpoint.json")
-    print(f"Loading viewpoint from: {viewpoint_path}")
+        target_x = target_position[0]
+        target_y = target_position[1]
+        target_yaw = 0.0
+        frame_id = "map"
+        wait_timeout = 5.0
 
-    # traverse the .pkl in the directory to get constructed maps
-    obj_map = []
-    for file in os.listdir(load_dir):
-        if file.endswith(".pkl"):
-            obj_results_path = os.path.join(load_dir, file)
-            # object construction
-            loaded_obj = BaseObject.load_from_disk(obj_results_path)
-            obj_map.append(loaded_obj)
-    print(f"Successfully loaded {len(obj_map)} objects")
+        self.send_goal(target_x, target_y, target_yaw, frame_id, wait_timeout)
 
-    ### Init of CLIP
-    print("Loading CLIP model")
-    # clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
-    #     "ViT-H-14", "laion2b_s32b_b79k"
-    # )
-    # clip_model = clip_model.to("cuda")
-    # clip_tokenizer = open_clip.get_tokenizer("ViT-H-14")
+        print("==============================")
 
-    clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
-        cfg.clip.model_name, pretrained=cfg.clip.pretrained
-    )
-    clip_model = clip_model.to(cfg.device)
-    clip_model.eval()
+    def get_related_obj_position(self, msg):
+        self.related_object_name = msg.data
+        print(f"Received related object name: {self.related_object_name}")
 
-    # Only reparameterize if the model is MobileCLIP
-    if "MobileCLIP" in cfg.clip.model_name:
-        from mobileclip.modules.common.mobileone import reparameterize_model
+        print("==> related object")
+        related_corner_list = self.query_callback(self.related_object_name)
+        print(f"[query] related object: {self.related_object_name}")
+        related_position = np.array(related_corner_list).mean(axis=0)
 
-        clip_model = reparameterize_model(clip_model)
+        # TODO:
 
-    clip_tokenizer = open_clip.get_tokenizer(cfg.clip.model_name)
+        print("==============================")
 
-    print("Done initializing CLIP model.")
+    def get_hazard_position(self, msg):
+        self.hazard_name = msg.data
+        print(f"Received hazard name: {self.hazard_name}")
 
-    cmap = matplotlib.colormaps.get_cmap("turbo")
+        print("==> avoid object")
 
-    ### Set the visualizer
-    vis = o3d.visualization.VisualizerWithKeyCallback()
-    # Create window
-    vis.create_window(
-        window_name=f"Offline Visualization", width=1920, height=1920
-    )
+        avoid_corner_list = self.query_callback(self.hazard_name)
+        pop_hazard2yaml(avoid_corner_list)
+        print("==============================")
 
-    for obj in obj_map:
-        vis.add_geometry(obj.pcd)
+    def query_callback(self, instance_query):
 
-    print(f"Obj Map length: %d" % len(obj_map))
+        text_queries = [instance_query]
 
-    view_param = None
-    if os.path.exists(viewpoint_path):
-        print(f"Loading saved viewpoint from {viewpoint_path}")
-        view_param = o3d.io.read_pinhole_camera_parameters(viewpoint_path)
-        vis.get_view_control().convert_from_pinhole_camera_parameters(
-            view_param
-        )
-
-    # variables for query sim color map
-    queried_color_objs = []
-    highlighted_objs = []
-
-    def pcd_sem_color_callback(vis):
-        print("Show the Pointcloud with semantic colors")
-        vis.clear_geometries()
-        for obj in obj_map:
-            sem_pcd = copy.deepcopy(obj.pcd)
-            color = class_id_colors[obj.class_id]
-            vis.add_geometry(sem_pcd.paint_uniform_color(color))
-        reset_view()
-
-    def pcd_rgb_color_callback(vis):
-        print("Show the Pointcloud with RGB colors")
-        vis.clear_geometries()
-        for obj in obj_map:
-            vis.add_geometry(obj.pcd)
-        reset_view()
-
-    ### Visualization exit
-    def vis_exit_callback(vis):
-        vis.destroy_window()
-        sys.exit(0)
-
-    def query_callback(vis):
-        text_query = input("Enter your query: ")
-
-        # exit the querying
-        if text_query == "exit" or text_query == "quit":
-            vis.destroy_window()
-            sys.exit(0)
-
-        text_queries = [text_query]
-
-        text_queries_tokenized = clip_tokenizer(text_queries).to("cuda")
-        text_query_ft = clip_model.encode_text(text_queries_tokenized)
+        text_queries_tokenized = self.clip_tokenizer(text_queries).to("cuda")
+        text_query_ft = self.clip_model.encode_text(text_queries_tokenized)
         text_query_ft = text_query_ft / text_query_ft.norm(dim=-1, keepdim=True)
         text_query_ft = text_query_ft.squeeze()
 
         ## Get stacked clip feats from the map
         values = []
-        for obj in obj_map:
+        for obj in self.obj_map:
             values.append(torch.from_numpy(obj.clip_ft))
         map_clip_fts = torch.stack(values, dim=0).to("cuda")
 
@@ -213,113 +254,88 @@ def main(cfg: DictConfig):
         ## Get top k candidates
         top_k = 1
         top_k_cos_sim, top_k_idx = torch.topk(cos_sim, top_k, dim=0)
-        print("Top 5 similar objects:")
-        for i, (cos_val, idx) in enumerate(
-            zip(top_k_cos_sim.tolist(), top_k_idx.tolist())
-        ):
+        print("Most similar object:")
+        for i, (cos_val, idx) in enumerate(zip(top_k_cos_sim.tolist(), top_k_idx.tolist())):
+
+            bbox_2d = self.obj_map[idx].bbox_2d
+            min_x = bbox_2d.min_bound[0]
+            min_y = bbox_2d.min_bound[1]
+
+            max_x = bbox_2d.max_bound[0]
+            max_y = bbox_2d.max_bound[1]
+
+            left_down_map = transfromPos(np.array([min_x, min_y]))
+            right_down_map = transfromPos(np.array([max_x, min_y]))
+            left_up_map = transfromPos(np.array([max_x, max_y]))
+            right_up_map = transfromPos(np.array([min_x, max_y]))
+
+            print(f"{i+1}. No. {idx} : {cos_val:.3f}")
             print(
-                f"{i+1}. No. {idx} {class_id_names[obj_map[idx].class_id]}: {cos_val:.3f}"
+                f"{self.obj_map[idx].class_name}, position {self.obj_map[idx].bbox_2d}, path {self. obj_map[idx].save_path}"
             )
 
-        ## Save the highlighted objects with top5 in red color
-        global highlighted_objs
-        highlighted_objs = []
-        for idx, obj in enumerate(obj_map):
-            temp_obj = copy.deepcopy(obj)
-            if idx in top_k_idx.tolist():
-                color = [1.0, 0.0, 0.0]  # Red color
-                temp_obj.pcd.paint_uniform_color(color)
-            highlighted_objs.append(temp_obj)
+            print("corners")
+            print(left_down_map)
+            print(right_down_map)
+            print(left_up_map)
+            print(right_up_map)
+            corner_list = [left_down_map, right_down_map, left_up_map, right_up_map]
 
-        max_value = cos_sim.max()
-        min_value = cos_sim.min()
-        normalized_similarities = (cos_sim - min_value) / (
-            max_value - min_value
-        )
-        similarity_colors = cmap(
-            normalized_similarities.detach().cpu().numpy()
-        )[..., :3]
+            return corner_list
 
-        ## Save the colored objects
-        global queried_color_objs
-        queried_color_objs = []
-        for idx, obj in enumerate(obj_map):
-            temp_obj = copy.deepcopy(obj)
-            # change the color in temp_obj
-            temp_obj.pcd.colors = o3d.utility.Vector3dVector(
-                np.tile(
-                    [
-                        similarity_colors[idx, 0].item(),
-                        similarity_colors[idx, 1].item(),
-                        similarity_colors[idx, 2].item(),
-                    ],
-                    (len(temp_obj.pcd.points), 1),
-                )
-            )
-            queried_color_objs.append(temp_obj)
 
-        ### visualization
-        vis.clear_geometries()
-        for obj in highlighted_objs:
-            vis.add_geometry(obj.pcd)
+def transfromPos(position: np.array) -> np.array:
+    """
+    输入为dualmap世界坐标系读出的坐标，返回gazebo坐标系下的坐标
+    """
+    # return np.array([position[1], -position[0], -position[2]])
+    return np.array([position[1], -position[0]])
 
-        reset_view()
 
-    def highlight_objs_callback(vis):
-        global highlighted_objs
-        vis.clear_geometries()
-        for obj in highlighted_objs:
-            vis.add_geometry(obj.pcd)
-        reset_view()
+def pop_hazard2yaml(corners: list):
+    """
+    pump semantic hazard to yaml, pass to navigation modual
+    """
+    # FLAG: 修改为目标yaml位置
+    yaml_path = "keepout_bboxes.yaml"
 
-    def queried_color_objs_callback(vis):
-        global queried_color_objs
-        vis.clear_geometries()
-        for obj in queried_color_objs:
-            vis.add_geometry(obj.pcd)
-        reset_view()
+    left_down = corners[0]
+    right_down = corners[1]
+    left_up = corners[2]
+    right_up = corners[3]
 
-    def help_callback(vis):
-        help_info = """
-        Keybindings:
-        Q - Quit the application
-        R - Display the point cloud with RGB colors
-        C - Display the point cloud with semantic colors
-        F - Enter a query to find top similarity objects
-        H - Display this help message
-        N - Highlight objects based on previous query results
-        M - Colored objects based on previous query results
-        S - Save the current viewpoint
+    yaml_content = """bboxes:
+  - frame: map
+    corners:
+      - [{:.1f}, {:.1f}]  # 左下角
+      - [{:.1f}, {:.1f}]   # 右下角
+      - [{:.1f}, {:.1f}]    # 右上角
+      - [{:.1f}, {:.1f}]   # 左上角
+    """.format(
+        left_down[0], left_down[1], right_down[0], right_down[1], left_up[0], left_up[1], right_up[0], right_up[1]
+    )
 
-        Press the corresponding key to perform the action.
-        """
-        print(help_info)
+    with open(yaml_path, "w") as f:
+        f.write(yaml_content)
 
-    def save_view_callback(vis):
-        ctr = vis.get_view_control()
-        param = ctr.convert_to_pinhole_camera_parameters()
-        o3d.io.write_pinhole_camera_parameters(viewpoint_path, param)
-        print(f"Viewpoint saved to {viewpoint_path}")
+    print(f"[query] Pumped semantic hazard to yaml: {yaml_path}")
 
-    def reset_view():
-        if view_param is not None:
-            vis.get_view_control().convert_from_pinhole_camera_parameters(
-                view_param
-            )
 
-    vis.register_key_callback(ord("Q"), vis_exit_callback)
-    vis.register_key_callback(ord("R"), pcd_rgb_color_callback)
-    vis.register_key_callback(ord("C"), pcd_sem_color_callback)
-    vis.register_key_callback(ord("F"), query_callback)
-    vis.register_key_callback(ord("N"), highlight_objs_callback)
-    vis.register_key_callback(ord("M"), queried_color_objs_callback)
-    vis.register_key_callback(ord("H"), help_callback)
-    vis.register_key_callback(ord("S"), save_view_callback)
+def main(cfg_path: str):
 
-    help_callback(vis)
+    rclpy.init()
 
-    vis.run()
+    target_subscriber = TaskSubscriber(cfg_path)
+
+    rclpy.spin(target_subscriber)
 
 
 if __name__ == "__main__":
-    main()
+    import yaml
+    from pathlib import Path
+
+    cfg_path = "/home/tipriest/Documents/DualMap/config/query_config.yaml"
+    try:
+        main(cfg_path)
+    finally:
+        rclpy.shutdown()
