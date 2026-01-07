@@ -102,11 +102,21 @@ class RunnerROS2(Node, RunnerROSBase):
             rgb_img = self.decompress_image(rgb_msg.data, is_depth=False)
             depth_img = self.decompress_image(depth_msg.data, is_depth=True)
         else:
-            rgb_img = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding="rgb8")
-            depth_img = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="passthrough")
+            rgb_img = self.bridge.imgmsg_to_cv2(
+                rgb_msg, desired_encoding="rgb8"
+            )
+            depth_img = self.bridge.imgmsg_to_cv2(
+                depth_msg, desired_encoding="passthrough"
+            )
 
-        depth_factor = getattr(self.dataset_cfg, 'depth_factor', 1000.0)
+        depth_factor = getattr(self.dataset_cfg, "depth_factor", 1000.0)
         depth_img = self.process_depth_image(depth_img, depth_factor)
+
+        # 上下翻转 RGB 与深度图
+        if self.cfg.rgb_need_flip:
+            rgb_img = self.flip_vertical(rgb_img)
+        if self.cfg.depth_need_flip:
+            depth_img = self.flip_vertical(depth_img)
 
         translation = np.array(
             [

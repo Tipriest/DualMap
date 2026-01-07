@@ -138,6 +138,24 @@ class RunnerROSBase:
                 depth_img = depth_resized
 
         return rgb_img, depth_img
+
+    def flip_vertical(self, img):
+        """
+        Flip RGB and depth images vertically (上下翻转).
+
+        Args:
+            rgb_img: HxWx3 uint8 RGB image or None.
+            depth_img: HxW or HxWx1 depth array or None.
+
+        Returns:
+            (rgb_flipped, depth_flipped)
+        """
+        if img is not None:
+            img = cv2.flip(img, 0)  # flip around x-axis
+            img = cv2.flip(img, 1)  # flip around x-axis
+
+        return img
+
     def process_depth_image(self, depth_img, depth_factor):
         """
         Process depth image to convert to meters (float32) with shape (H, W, 1).
