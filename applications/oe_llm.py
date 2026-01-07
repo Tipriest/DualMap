@@ -15,6 +15,7 @@ class TaskPublisher(Node):
     def __init__(self):
         super().__init__('task_target_pub')
         self.publisher_ = self.create_publisher(String, 'target_name', 10)
+        self.related_obj_publisher_ = self.create_publisher(String, 'related_object', 10)
         self.hazard_publisher_ = self.create_publisher(String, 'semantic_hazard', 10)
 
     def publish_task(self, target_name):
@@ -22,7 +23,14 @@ class TaskPublisher(Node):
         msg.data = target_name
         self.publisher_.publish(msg)
         self.get_logger().info(f'Published target name: {msg.data}')
-        
+    
+    def publish_related_obj(self, related_object):
+        msg = String()
+        msg.data = related_object
+        self.related_obj_publisher_.publish(msg)
+        self.get_logger().info(f'Published related object: {msg.data}')
+
+
     def publish_hazard(self, avoid_hazard):
         msg = String()
         msg.data = avoid_hazard
@@ -48,18 +56,21 @@ def task_extract():
 
     请提取：
     1. **目标房间** (target_room)：要去的房间类型（如卧室、厨房、客厅等），如果有定语也保留（如孩子的卧室等）
-    2. **寻找物品** (target_object)：需要在目标房间找到的物品
-    3. **避开物品** (avoid_object)：路途中需要避开的东西
+    2. **相关物体** (related_object)：与目标房间相关的物体（如床、桌子等）
+    3. **寻找物品** (target_object)：需要在目标房间找到的物品
+    4. **避开物品** (avoid_object)：路途中需要避开的东西
 
     规则：
     - 如果某项信息不明确或不存在，请返回 "None"
     - 物品名称应该是具体的（如"被子"而不是"那个被子"），一定会有需要找到的物体！！！
+    - 相关物体的意思是，例如"去卧室拿床上的被子"，相关物体就是“床”，如果没有相关物体，请返回 "None"，相关物体如果存在一定是在命令中提到的
     - 只返回JSON格式，不要有其他文本
 
     输出格式：
     {{
         "target_room": "房间名称",
-        "target_object": "物品名称", 
+        "related_object": "物品名称", 
+        "target_object": "物品名称",
         "avoid_object": "物品名称"
     }}
 
@@ -130,15 +141,24 @@ def task_extract():
                 content_dict["avoid_object"] = "None"
         
         # 现在可以安全访问字典了
+
         target_name = content_dict.get("target_object", "None")
+        related_object = content_dict.get("related_object", "None")
         avoid_hazard = content_dict.get("avoid_object", "None")
 
-    
-    task_pub.publish_task(target_name)
-    task_pub.publish_hazard(avoid_hazard)
-    
-    print(f"Published target name: {target_name}")
-    print(f"Published semantic hazard: {avoid_hazard}")
+
+    if target_name != "None":
+        
+        task_pub.publish_task(target_name)
+        print(f"Published target name: {target_name}")
+
+    if related_object != "None":
+        task_pub.publish_related_obj(related_object)
+        print(f"Published related object: {related_object}")
+
+    if avoid_hazard != "None":
+        task_pub.publish_hazard(avoid_hazard)
+        print(f"Published semantic hazard: {avoid_hazard}")
     
 
     rclpy.spin(task_pub)

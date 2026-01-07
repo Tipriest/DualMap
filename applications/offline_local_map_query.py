@@ -43,7 +43,7 @@ class TaskSubscriber(Node):
         with open(cfg_path, "r") as f:
             self.cfg = yaml.safe_load(f)
         self.subscription = self.create_subscription(String, "target_name", self.get_target_position, 10)
-
+        self.related_obj_subscription = self.create_subscription(String, "related_object", self.get_related_obj_position, 10)
         self.hazard_subscription = self.create_subscription(String, "semantic_hazard", self.get_hazard_position, 10)
 
 
@@ -208,6 +208,19 @@ class TaskSubscriber(Node):
 
         print("==============================")
 
+    def get_related_obj_position(self, msg):
+        self.related_object_name = msg.data
+        print(f"Received related object name: {self.related_object_name}")
+
+        print("==> related object")
+        related_corner_list = self.query_callback(self.related_object_name)
+        print(f"[query] related object: {self.related_object_name}")
+        related_position = np.array(related_corner_list).mean(axis=0)
+
+        # TODO: 
+
+        print("==============================")
+
     def get_hazard_position(self, msg):
         self.hazard_name = msg.data
         print(f"Received hazard name: {self.hazard_name}")
@@ -239,7 +252,7 @@ class TaskSubscriber(Node):
         ## Get top k candidates
         top_k = 1
         top_k_cos_sim, top_k_idx = torch.topk(cos_sim, top_k, dim=0)
-        print("Top 5 similar objects:")
+        print("Most similar object:")
         for i, (cos_val, idx) in enumerate(zip(top_k_cos_sim.tolist(), top_k_idx.tolist())):
 
             bbox_2d = self.obj_map[idx].bbox_2d
