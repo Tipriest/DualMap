@@ -21,32 +21,34 @@ from utils.object import BaseObject
 from mobileclip.modules.common.mobileone import reparameterize_model
 
 import rclpy
+from rclpy.action import ActionClient
 from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray, String
+from geometry_msgs.msg import PoseStamped
+from nav2_msgs.action import NavigateToPose
+import math
 
 
-class TargetPositionPublisher(Node):
-    def __init__(self):
-        super().__init__("target_position_publisher")
-        self.publisher_ = self.create_publisher(Float64MultiArray, "target_position", 10)
+def yaw_to_quaternion(yaw: float):
+    # Assuming roll=pitch=0
+    qz = math.sin(yaw * 0.5)
+    qw = math.cos(yaw * 0.5)
+    return 0.0, 0.0, qz, qw
 
-    def publish_position(self, position):
-        msg = Float64MultiArray()
-        msg.data = position.tolist()
-        self.publisher_.publish(msg)
-        self.get_logger().info(f"Published target position: {msg.data}")
 
 
 class TaskSubscriber(Node):
     def __init__(self, cfg_path: str):
-        super().__init__("task_subscriber")
+        super().__init__("nav2_goal_sender")
         with open(cfg_path, "r") as f:
             self.cfg = yaml.safe_load(f)
         self.subscription = self.create_subscription(String, "target_name", self.get_target_position, 10)
 
         self.hazard_subscription = self.create_subscription(String, "semantic_hazard", self.get_hazard_position, 10)
 
-        self.position_pub = TargetPositionPublisher()
+
+        self._action_name = "/navigate_to_pose"
+        self._client = ActionClient(self, NavigateToPose, self._action_name)
 
         self.load_dir = None
         self.target_name = None
@@ -59,11 +61,65 @@ class TaskSubscriber(Node):
         # self.test_clip_offline("tv")
         # print("test end!")
 
+    def send_goal(self, x: float, y: float, yaw: float, frame_id: str, wait_timeout: float) -> bool:
+        if not self._client.wait_for_server(timeout_sec=wait_timeout):
+            self.get_logger().error(
+                f"NavigateToPose action server not available: '{self._action_name}'. "
+                f"(waited {wait_timeout}s)"
+            )
+            return False
+
+        goal_msg = NavigateToPose.Goal()
+        goal_msg.pose = PoseStamped()
+        goal_msg.pose.header.frame_id = frame_id
+        goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
+        goal_msg.pose.pose.position.x = float(x)
+        goal_msg.pose.pose.position.y = float(y)
+        qx, qy, qz, qw = yaw_to_quaternion(float(yaw))
+        goal_msg.pose.pose.orientation.x = qx
+        goal_msg.pose.pose.orientation.y = qy
+        goal_msg.pose.pose.orientation.z = qz
+        goal_msg.pose.pose.orientation.w = qw
+
+        self.get_logger().info(
+            f"Sending Nav2 goal to '{self._action_name}': x={x:.3f}, y={y:.3f}, yaw={yaw:.3f} ({frame_id})"
+        )
+
+        send_future = self._client.send_goal_async(goal_msg)
+        rclpy.spin_until_future_complete(self, send_future)
+        goal_handle = send_future.result()
+
+        if goal_handle is None:
+            self.get_logger().error("Failed to send goal (no goal_handle).")
+            return False
+
+        if not goal_handle.accepted:
+            self.get_logger().error("Goal rejected by server.")
+            return False
+
+        self.get_logger().info("Goal accepted. Waiting for result...")
+        result_future = goal_handle.get_result_async()
+        rclpy.spin_until_future_complete(self, result_future)
+        result = result_future.result()
+
+        if result is None:
+            self.get_logger().error("No result returned.")
+            return False
+
+        status = result.status
+        # 4 == SUCCEEDED (action_msgs/msg/GoalStatus)
+        if status == 4:
+            self.get_logger().info("Navigation SUCCEEDED.")
+            return True
+
+        self.get_logger().warn(f"Navigation finished with status={status}.")
+        return False
+
+
     def load_results(self):
         ### Loading saved results
         # if map_dir is not provided, use the default path
         # FLAG: 移植实机需处理目录
-        load_dir = None
         # if os.path.exists(self.cfg.test_map_dir):
         #     load_dir = self.cfg.test_map_dir
         # else:
@@ -122,7 +178,14 @@ class TaskSubscriber(Node):
         corner_list = self.query_callback(self.target_name)
         target_position = np.array(corner_list).mean(axis=0)
         print(f"[query] target position: {target_position}")
-        self.position_pub.publish_position(target_position)
+        target_x = target_position[0]
+        target_y = target_position[1]
+        target_yaw = 0.0  
+        frame_id = "map"
+        wait_timeout = 5.0
+
+        self.send_goal(target_x, target_y, target_yaw, frame_id, wait_timeout)
+
         print("==============================")
 
     def test_clip_offline(self, target: str):
@@ -134,7 +197,15 @@ class TaskSubscriber(Node):
         corner_list = self.query_callback(target)
         target_position = np.array(corner_list).mean(axis=0)
         print(f"[query] target position: {target_position}")
-        self.position_pub.publish_position(target_position)
+        
+        target_x = target_position[0]
+        target_y = target_position[1]
+        target_yaw = 0.0  
+        frame_id = "map"
+        wait_timeout = 5.0
+
+        self.send_goal(target_x, target_y, target_yaw, frame_id, wait_timeout)
+
         print("==============================")
 
     def get_hazard_position(self, msg):
@@ -235,25 +306,10 @@ def pop_hazard2yaml(corners: list):
     print(f"[query] Pumped semantic hazard to yaml: {yaml_path}")
 
 
-def getInstances():
-
-    text_query = input("Enter your query (type 'bye' to exit): ").strip()
-
-    if text_query == "bye" or text_query == "quit":
-        print("Exiting query loop...")
-        return
-
-    ai_scientist = TaskExtractor(text_query)
-    extract_res = ai_scientist.extract_navigation_components()
-
-    return extract_res
-
-
 def main(cfg_path: str):
 
     rclpy.init()
 
-    position_publisher = TargetPositionPublisher()
     target_subscriber = TaskSubscriber(cfg_path)
 
     rclpy.spin(target_subscriber)
