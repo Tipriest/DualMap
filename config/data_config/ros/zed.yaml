@@ -1,4 +1,4 @@
-dataset_name: 'd435i'
+dataset_name: 'zed'
 
 ros_topics:
   rgb: "/zed/zed_node/rgb/color/rect/image"

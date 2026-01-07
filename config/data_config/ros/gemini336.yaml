@@ -1,0 +1,22 @@
+dataset_name: 'gemini336'
+
+ros_topics:
+  rgb: "/camera/color/image_raw"
+  depth: "/camera/depth/image_raw"
+  odom: "/odom"
+  camera_info: "/camera/depth/camera_info"
+
+# Depth factor for converting depth values from millimeters to meters
+depth_factor: 1000.0
+
+intrinsic:
+  fx: 630.8366088867188
+  fy: 630.8366088867188
+  cx: 635.5
+  cy: 366.5
+
+extrinsics:
+  - [0.0000000,   0.0000000,  1.0000000,  0.2600000]
+  - [-1.0000000,  0.0000000,  0.0000000,  0.0000000]
+  - [0.0000000,  -1.0000000,  0.0000000,  1.6000000]
+  - [0.0000000,   0.0000000,  0.0000000,  1.0000000]
