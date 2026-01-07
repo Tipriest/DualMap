@@ -1,5 +1,6 @@
 # 数据集处理
-## 1.数据集1(物体数量较少，目前建议用数据集2)
+
+## 1.仿真数据集1(物体数量较少，目前建议用数据集2)
 从这个[网盘链接](https://t3.znas.cn/Hi7YArimDPf)进行下载，下载后放置在本项目的output路径下:
 将压缩文件解压，最终期望的文件路径及结构如下所示:
 ```bash
@@ -49,5 +50,10 @@ user at Uranus in ~/dataset
 
 12 directories, 1 file
 ```
-## 2.数据集2
+## 2.仿真数据集2
 从这个[网盘链接](https://t3.znas.cn/6MLwQlsDK2e)进行下载，下载后放置在本项目的`output/map_results/hm3d_00829-QaLdnwvtxbs`路径下:
+
+
+## 2.工训实验场地数据集下载地址
+
+[工训楼实地场景实验](https://t3.znas.cn/Au6pKHd1KR7)
