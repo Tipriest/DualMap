@@ -563,7 +563,7 @@ class Dualmap:
                 )  # Timeout exception
                 logger.info(
                     f"[Core][MappingThread] Received data for frame {curr_frame_id},"
-                    " Queue size {self.detection_results_queue.qsize()}"
+                    f" Queue size {self.detection_results_queue.qsize()}"
                 )
 
                 # Set time stamp

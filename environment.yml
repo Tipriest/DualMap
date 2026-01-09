@@ -1,4 +1,4 @@
-name: dualmap2
+name: dualmap
 channels:
   - nvidia
   - pytorch
