@@ -14,14 +14,21 @@ import re
 class TaskPublisher(Node):
     def __init__(self):
         super().__init__('task_target_pub')
-        self.publisher_ = self.create_publisher(String, 'target_name', 10)
+        self.publisher_room_ = self.create_publisher(String, 'target_room', 10)
+        self.publisher_target_ = self.create_publisher(String, 'target_name', 10)
         self.related_obj_publisher_ = self.create_publisher(String, 'related_object', 10)
         self.hazard_publisher_ = self.create_publisher(String, 'semantic_hazard', 10)
+
+    def publish_room(self, target_room):
+        msg = String()
+        msg.data = target_room
+        self.publisher_room_.publish(msg)
+        self.get_logger().info(f'Published room name: {msg.data}')
 
     def publish_task(self, target_name):
         msg = String()
         msg.data = target_name
-        self.publisher_.publish(msg)
+        self.publisher_target_.publish(msg)
         self.get_logger().info(f'Published target name: {msg.data}')
     
     def publish_related_obj(self, related_object):
@@ -114,56 +121,71 @@ def task_extract():
     end_time = time.time()
     print("cost time", end_time-start_time)
     
-
+    content_dict = {}
     # 解析JSON
     try:
         content_dict = json.loads(content)
     except json.JSONDecodeError:
         # 如果失败，尝试从文本中提取 JSON 部分
         # 查找 {...} 格式的 JSON
-        json_match = re.search(r'\{[^{}]*\}', content)
+
+        json_match = re.search(r'\{[\s\S]*\}', content)  # 注意：贪婪，可能拿到多段时仍不稳
         if json_match:
             json_str = json_match.group()
-            content_dict = json.loads(json_str)
+            try:
+                content_dict = json.loads(json_str)
+            except Exception:
+                content_dict = {}
         else:
             # 如果没有找到 JSON，尝试提取键值对
-            content_dict = {}
-            # 查找 target_object
-            target_match = re.search(r'"target_object":\s*"([^"]+)"', content)
+            """
+                提取的内容包含： 1、房间 2、相关物体 3、寻找物品 4、避开物品
+            """
+            room_match = re.search(r'"target_room"\s*:\s*"([^"]+)"', content)
+            if room_match:
+                content_dict["target_room"] = room_match.group(1)
+
+            related_match = re.search(r'"related_object"\s*:\s*"([^"]+)"', content)
+            if related_match:
+                content_dict["related_object"] = related_match.group(1)
+
+            target_match = re.search(r'"target_object"\s*:\s*"([^"]+)"', content)
             if target_match:
                 content_dict["target_object"] = target_match.group(1)
-            
-            # 查找 avoid_object
-            avoid_match = re.search(r'"avoid_object":\s*"([^"]+)"', content)
+
+            avoid_match = re.search(r'"avoid_object"\s*:\s*"([^"]+)"', content)
             if avoid_match:
                 content_dict["avoid_object"] = avoid_match.group(1)
-            elif '"avoid_object":\s*"None"' in content or '"avoid_object":\s*null' in content:
-                content_dict["avoid_object"] = "None"
-        
-        # 现在可以安全访问字典了
+            else:
+                # 正则判断 None/null
+                if re.search(r'"avoid_object"\s*:\s*(null|"None")', content):
+                    content_dict["avoid_object"] = "None"
 
-        target_name = content_dict.get("target_object", "None")
-        related_object = content_dict.get("related_object", "None")
-        avoid_hazard = content_dict.get("avoid_object", "None")
+    # 现在可以安全访问字典了
+    target_room = content_dict.get("target_room", "None")
+    target_name = content_dict.get("target_object", "None")
+    related_object = content_dict.get("related_object", "None")
+    avoid_hazard = content_dict.get("avoid_object", "None")
 
-
-    if target_name != "None":
-        
-        task_pub.publish_task(target_name)
-        print(f"Published target name: {target_name}")
+    # TODO: 这里有room没有确定对面已经接到了
+    if target_room != "None":
+        task_pub.publish_room(target_room)
+        print(f"Published target name: {target_room}")
 
     if related_object != "None":
         task_pub.publish_related_obj(related_object)
         print(f"Published related object: {related_object}")
 
+    if target_name != "None":
+        task_pub.publish_task(target_name)
+        print(f"Published target name: {target_name}")
+
     if avoid_hazard != "None":
         task_pub.publish_hazard(avoid_hazard)
         print(f"Published semantic hazard: {avoid_hazard}")
-    
 
     rclpy.spin(task_pub)
-    
 
 if __name__ == '__main__':
-    
+
     task_extract()
