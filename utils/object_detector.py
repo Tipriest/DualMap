@@ -2072,7 +2072,7 @@ class Filter:
                         break
 
         logger.info(
-            f"[Detector][Filter] 原始检测数量: {N}, 掩码IoU过滤后: {np.sum(keep)}"
+            f"[Detector][Filter][by iou] 原始检测数量: {N}, 掩码IoU过滤后: {np.sum(keep)}"
         )
         return keep
 
@@ -2146,7 +2146,7 @@ class Filter:
                             )
 
         logger.info(
-            f"[Detector][Filter] Original number of detections: {N}, after proximity filter: {np.sum(keep)}"
+            f"[Detector][Filter][by proximity] Original number of detections: {N}, after proximity filter: {np.sum(keep)}"
         )
         return keep
 
