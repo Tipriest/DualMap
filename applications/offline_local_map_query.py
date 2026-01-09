@@ -8,6 +8,7 @@ import os
 
 os.environ["DISPLAY"] = ""
 import sys
+import time
 
 import yaml
 import numpy as np
@@ -53,7 +54,7 @@ class TaskSubscriber(Node):
 
         self.costmap_sub = self.create_subscription(OccupancyGrid, "/global_map/cost_map", self.costmap_callback, 10)
         # TODO: odom话题是什么
-        self.position_sub = self.create_subscription(Odometry, "/amcl_pose", self.position_callback, 10)
+        self.position_sub = self.create_subscription(Odometry, "/odom", self.position_callback, 10)
 
         self._action_name = "/navigate_to_pose"
         self._client = ActionClient(self, NavigateToPose, self._action_name)
@@ -67,9 +68,14 @@ class TaskSubscriber(Node):
         self.load_results()
         self.init_clip()
 
+        self.current_x = 0.0
+        self.current_y = 0.0
+        self.current_yaw = 0.0
+
 
         self.is_room_ready = False
         self.is_related_position = False
+        self.is_arrived = False
 
         # 输入格式：min_x, max_x, min_y, max_y
         self.room_edges = {
@@ -86,7 +92,28 @@ class TaskSubscriber(Node):
 
     def position_callback(self, msg: Odometry):
         self.latest_position = msg.data
-
+    # 获取x, y坐标
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        
+        # 从四元数提取yaw角
+        orientation = msg.pose.pose.orientation
+        qx = orientation.x
+        qy = orientation.y
+        qz = orientation.z
+        qw = orientation.w
+        
+        # 计算yaw角（绕Z轴的旋转）
+        yaw = math.atan2(2.0 * (qw * qz + qx * qy), 
+                        qw * qw + qx * qx - qy * qy - qz * qz)
+        
+        # 存储到类变量中
+        self.current_x = x
+        self.current_y = y
+        self.current_yaw = yaw
+    
+        # 打印调试信息
+        print(f"Robot Position: x={x:.3f}, y={y:.3f}, yaw={math.degrees(yaw):.2f}°")
 
     def _room_cb(self, msg: String):
         self.room = msg.data
@@ -279,7 +306,11 @@ class TaskSubscriber(Node):
         frame_id = "map"
         wait_timeout = 5.0
 
-        # self.send_goal(target_x, target_y, target_yaw, frame_id, wait_timeout)
+        self.target_x = target_x
+        self.target_y = target_y
+
+        if not self.is_related_position:
+            self.send_goal(target_x, target_y, target_yaw, frame_id, wait_timeout)
 
         print("========== TARGET OBJ GOAL SEND END ===========")
 
@@ -320,6 +351,7 @@ class TaskSubscriber(Node):
         print("==============================")
 
     def get_related_obj_position(self, msg):
+
         self.related_object_name = msg.data
         print(f"Received related object name: {self.related_object_name}")
 
@@ -336,9 +368,45 @@ class TaskSubscriber(Node):
         frame_id = "map"
         wait_timeout = 5.0
 
-        # self.send_goal(related_x, related_y, related_yaw, frame_id, wait_timeout)
+        
+        # 发布相关物体位置
+        self.send_goal(related_x, related_y, related_yaw, frame_id, wait_timeout)
+
+        while not self.is_arrived:
+            self.is_arrived = int(input("Have you arrived at the related object? (0/1) "))
+            time.sleep(2)
+
+        delta_yaw = self.calculate_yaw_to_target(self.target_x, self.target_y)
+
+        # self.send_goal(0, 0, delta_yaw, frame_id, wait_timeout)
+        print("turning to target", delta_yaw)
+
 
         print("======== RELATED OBJ GOAL SEND END ============")
+
+
+    def calculate_yaw_to_target(self, target_x, target_y):
+        """
+        计算机器人需要旋转多少角度才能面向目标点
+        """
+        if not hasattr(self, 'current_x'):
+            return 0
+        
+        # 计算目标点相对于机器人的方向
+        dx = target_x - self.current_x
+        dy = target_y - self.current_y
+        
+        # 计算目标点相对于机器人的角度（全局坐标系）
+        target_angle = math.atan2(dy, dx)
+        
+        # 计算需要旋转的角度（当前yaw到目标角度的差）
+        angle_diff = target_angle - self.current_yaw
+        
+        # 将角度标准化到[-π, π]范围内
+        angle_diff = math.atan2(math.sin(angle_diff), math.cos(angle_diff))
+        
+        return angle_diff
+
 
     def get_hazard_position(self, msg):
 
