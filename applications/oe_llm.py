@@ -176,6 +176,9 @@ def task_extract():
         task_pub.publish_related_obj(related_object)
         print(f"Published related object: {related_object}")
 
+        # 确保offline部分先拿到物体的变量
+        time.sleep(2)
+
     if target_name != "None":
         task_pub.publish_task(target_name)
         print(f"Published target name: {target_name}")

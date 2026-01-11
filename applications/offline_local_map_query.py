@@ -16,7 +16,10 @@ import open_clip
 import torch
 import torch.nn.functional as F
 
-sys.path.append("/home/tang123/DualMap/")
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))        # applications/
+PROJECT_ROOT = os.path.dirname(PROJECT_ROOT)                    # DualMap/
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from utils.object import BaseObject
 from mobileclip.modules.common.mobileone import reparameterize_model
@@ -29,6 +32,56 @@ from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose
 import math
 from nav_msgs.msg import OccupancyGrid, Odometry
+
+from typing import Dict, Optional
+from action_msgs.msg import GoalStatus, GoalStatusArray
+
+
+def uuid_to_hex(goal_id_msg) -> str:
+    # goal_id_msg is unique_identifier_msgs/msg/UUID
+    try:
+        return bytes(goal_id_msg.uuid).hex()
+    except Exception:
+        return str(goal_id_msg)
+
+
+STATUS_NAME = {
+    GoalStatus.STATUS_UNKNOWN: "UNKNOWN",
+    GoalStatus.STATUS_ACCEPTED: "ACCEPTED",
+    GoalStatus.STATUS_EXECUTING: "EXECUTING",
+    GoalStatus.STATUS_CANCELING: "CANCELING",
+    GoalStatus.STATUS_SUCCEEDED: "SUCCEEDED",
+    GoalStatus.STATUS_CANCELED: "CANCELED",
+    GoalStatus.STATUS_ABORTED: "ABORTED",
+}
+
+
+class Nav2GoalStatusMonitor(Node):
+    def __init__(self, action_name: str):
+        super().__init__("nav2_goal_status_monitor")
+        self._action_name = action_name.rstrip("/")
+        self._status_topic = f"{self._action_name}/_action/status"
+        self._last_status_by_goal: Dict[str, int] = {}
+
+        self.create_subscription(GoalStatusArray, self._status_topic, self._on_status, 10)
+        self.get_logger().info(f"Monitoring Nav2 action status topic: {self._status_topic}")
+
+    def _on_status(self, msg: GoalStatusArray) -> None:
+        if not msg.status_list:
+            # Still print occasionally so user knows it's alive
+            self.get_logger().info("No active goals.")
+            return
+
+        for st in msg.status_list:
+            goal_hex = uuid_to_hex(st.goal_info.goal_id)
+            status_code = int(st.status)
+            prev = self._last_status_by_goal.get(goal_hex)
+            if prev == status_code:
+                continue
+
+            self._last_status_by_goal[goal_hex] = status_code
+            name = STATUS_NAME.get(status_code, str(status_code))
+            self.get_logger().info(f"goal_id={goal_hex} status={name}")
 
 
 def yaw_to_quaternion(yaw: float):
@@ -48,16 +101,26 @@ class TaskSubscriber(Node):
         # 读取房间名称
         self.room_subscription = self.create_subscription(String, "target_room",self._room_cb, 10)
 
-        self.subscription = self.create_subscription(String, "target_name", self.get_target_position, 10)
         self.related_obj_subscription = self.create_subscription(String, "related_object", self.get_related_obj_position, 10)
+        self.subscription = self.create_subscription(String, "target_name", self.get_target_position, 10)
+
         self.hazard_subscription = self.create_subscription(String, "semantic_hazard", self.get_hazard_position, 10)
 
         self.costmap_sub = self.create_subscription(OccupancyGrid, "/global_map/cost_map", self.costmap_callback, 10)
-        # TODO: odom话题是什么
+
         self.position_sub = self.create_subscription(Odometry, "/odom", self.position_callback, 10)
 
         self._action_name = "/navigate_to_pose"
         self._client = ActionClient(self, NavigateToPose, self._action_name)
+
+        # monitor nav2 status
+        self._status_topic = f"{self._action_name}/_action/status"
+        self._last_status_by_goal: Dict[str, int] = {}
+
+        self.create_subscription(GoalStatusArray, self._status_topic, self._on_status, 10)
+        self.get_logger().info(f"Monitoring Nav2 action status topic: {self._status_topic}")
+
+        self.goal_id = None
 
         self.load_dir = None
         self.target_name = None
@@ -77,22 +140,46 @@ class TaskSubscriber(Node):
         self.is_related_position = False
         self.is_arrived = False
 
+        self.is_task_complete = False
+
         # 输入格式：min_x, max_x, min_y, max_y
         self.room_edges = {
-            "bedroom": [-6.45, -1.65, 0.8, 4.4],
-            "studyroom": [-6.6, -1.8, -3.1, -0.7]
+            "bedroom": [1.65, 6.45, -4.4, -0.8],
+            "studyroom": [1.8, 6.6, 0.7, 3.1]
         }
 
         # 手动给定目标，测试本地clip部分
-        self.test_clip_offline("bed Room", "chair")
-        print("test end!")
+        # self.test_clip_offline("bed Room", "chair")
+        # print("test end!")
+
+
+    def _on_status(self, msg: GoalStatusArray) -> None:
+        if not msg.status_list:
+            # Still print occasionally so user knows it's alive
+            self.get_logger().info("No active goals.")
+            return
+
+        for st in msg.status_list:
+            goal_hex = uuid_to_hex(st.goal_info.goal_id)
+            status_code = int(st.status)
+            prev = self._last_status_by_goal.get(goal_hex)
+            if prev == status_code:
+                continue
+
+            self._last_status_by_goal[goal_hex] = status_code
+            name = STATUS_NAME.get(status_code, str(status_code))
+
+            # flag 标识是否到达目标位置
+            if status_code == GoalStatus.SUCCEEDED:
+                self.is_arrived = True
+
+            self.get_logger().info(f"goal_id={goal_hex} status={name}")
 
     def costmap_callback(self, msg: OccupancyGrid):
         self.latest_costmap = msg
 
     def position_callback(self, msg: Odometry):
-        self.latest_position = msg.data
-    # 获取x, y坐标
+        # 获取x, y坐标
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
         
@@ -229,17 +316,9 @@ class TaskSubscriber(Node):
 
 
     def load_results(self):
-        ### Loading saved results
-        # if map_dir is not provided, use the default path
-        # FLAG: 移植实机需处理目录
-        # if os.path.exists(self.cfg.test_map_dir):
-        #     load_dir = self.cfg.test_map_dir
-        # else:
-        #     load_dir = os.path.join(
-        #         self.cfg.output_path, f"{self.cfg.dataset_name}_{self.cfg.scene_id}", "map"
-        #     )
+
         load_dir = (
-            "/home/tang123/DualMap/output/map_results/20260107_212437/global_map"
+            "/home/cycl/code_workspace/DualMap/output/20260107_220514/global_map"
         )
         if not os.path.exists(load_dir):
             print(f"Error: {load_dir} does not exist.")
@@ -289,8 +368,7 @@ class TaskSubscriber(Node):
 
 
     def get_target_position(self, msg):
-        
-        # TODO: 此处发布的是什么，要发布指向的yaw还是要发布位置呢？
+        """获取目标物体位置考虑是否发布"""
 
         self.target_name = msg.data
         print(f"Received target name: {self.target_name}")
@@ -309,11 +387,133 @@ class TaskSubscriber(Node):
         self.target_x = target_x
         self.target_y = target_y
 
+        # 如果没有相关物体，就直接发布目标物体位置
         if not self.is_related_position:
+            self.is_arrived = False
             self.send_goal(target_x, target_y, target_yaw, frame_id, wait_timeout)
+
+            # 到地点就转向
+            while not self.is_arrived:
+                time.sleep(1)
+                print("waiting for TARGET object goal to be reached...")
+
+            print("target object position", self.target_x, self.target_y)
+            # 获取目标物体位置
+            delta_yaw = self.calculate_yaw_to_target(self.target_x, self.target_y)
+
+            print("turning to target", delta_yaw)
+            self.is_arrived = False
+            self.send_goal(0, 0, delta_yaw, frame_id, wait_timeout)
+
+            while not self.is_arrived:
+                time.sleep(1)
+                print("TURNING to TARGET object goal...")
+
+            is_complete = self.check_task()
+
+            if not is_complete:
+                self.run_recovery()
+
 
         print("========== TARGET OBJ GOAL SEND END ===========")
 
+
+    def recover_get_target_position(self, target_name):
+        """重新获取目标物体位置考虑是否发布"""
+
+        self.target_name = target_name
+        print(f"Received RECOVERY target name: {self.target_name}")
+
+        print("==> RECOVERY target object")
+
+        corner_list = self.query_callback(self.target_name)
+        target_position = np.array(corner_list).mean(axis=0)
+        print(f"[query] RECOVERY target position: {target_position}")
+        target_x = target_position[0]
+        target_y = target_position[1]
+        target_yaw = 0.0  
+        frame_id = "map"
+        wait_timeout = 5.0
+
+        self.target_x = target_x
+        self.target_y = target_y
+
+        # 如果没有相关物体，就直接发布目标物体位置
+        if not self.is_related_position:
+            self.is_arrived = False
+            self.send_goal(target_x, target_y, target_yaw, frame_id, wait_timeout)
+
+            # 到地点就转向
+            while not self.is_arrived:
+                time.sleep(1)
+                print("waiting for RECOVERY TARGET object goal to be reached...")
+
+            print("RECOVERY target object position", self.target_x, self.target_y)
+            # 获取目标物体位置
+            delta_yaw = self.calculate_yaw_to_target(self.target_x, self.target_y)
+
+            print("turning to target", delta_yaw)
+            self.is_arrived = False
+            self.send_goal(0, 0, delta_yaw, frame_id, wait_timeout)
+
+            while not self.is_arrived:
+                time.sleep(1)
+                print("TURNING to RECOVERY TARGET object goal...")
+
+            is_complete = self.check_task()
+
+            return is_complete
+
+        print("========== RECOVERY TARGET OBJ GOAL SEND END ===========")
+        
+
+    def check_task(self):
+        """检查任务是否完成，如果没完成进入recovery"""
+
+        # TODO: 改成VLM判定
+        complete = input("If task complete, enter '1/0': ")
+
+        self.is_task_complete = True if complete == '1' else False
+
+        if not self.is_task_complete:
+            return False
+
+        else:
+            print("Task complete, exiting...")
+
+            # TODO: 改成回到原点
+            sys.exit(0)
+
+    def run_recovery(self):
+        """运行recovery流程"""
+        print("Running recovery...")
+
+        self.yaw_list = [0.0, np.pi/2, np.pi, -np.pi/2]
+
+        for yaw in self.yaw_list:
+
+            # 原地自转，重新建图
+            self.is_arrived = False
+            
+            self.send_goal(self.current_x, self.current_y, yaw, "map", 5.0)
+            while not self.is_arrived:
+                time.sleep(1)
+                print("TURNING TO recovery mapping goal...")
+
+        self.cnt_recovery = 0
+        while self.cnt_recovery < 3:
+            self.is_related_position = False
+
+            is_recovery_success = self.recover_get_target_position(self.target_name)
+
+            if not is_recovery_success:
+                self.cnt_recovery += 1
+                print("Recovery failed, try again...")
+                continue
+
+        print("Recovery failed, exiting...")
+        sys.exit(0)
+            
 
     def test_room_offline(self, room_name: String):
         self.room = room_name
@@ -368,21 +568,32 @@ class TaskSubscriber(Node):
         frame_id = "map"
         wait_timeout = 5.0
 
-        
         # 发布相关物体位置
+        self.is_arrived = False
         self.send_goal(related_x, related_y, related_yaw, frame_id, wait_timeout)
 
         while not self.is_arrived:
-            self.is_arrived = int(input("Have you arrived at the related object? (0/1) "))
-            time.sleep(2)
+            time.sleep(1)
+            print("waiting for RELATED object goal to be reached...")
 
+        print("target object position", self.target_x, self.target_y)
+        # 获取目标物体位置
         delta_yaw = self.calculate_yaw_to_target(self.target_x, self.target_y)
 
-        # self.send_goal(0, 0, delta_yaw, frame_id, wait_timeout)
         print("turning to target", delta_yaw)
-
+        self.is_arrived = False
+        self.send_goal(0, 0, delta_yaw, frame_id, wait_timeout)
 
         print("======== RELATED OBJ GOAL SEND END ============")
+
+        while not self.is_arrived:
+            time.sleep(1)
+            print("TURNING to TARGET object goal...")
+
+        is_complete = self.check_task()
+
+        if not is_complete:
+            self.run_recovery()
 
 
     def calculate_yaw_to_target(self, target_x, target_y):
@@ -420,6 +631,7 @@ class TaskSubscriber(Node):
         pop_hazard2yaml(avoid_corner_list)
         print("==============================")
 
+
     def query_callback(self, instance_query):
 
         text_queries = [instance_query]
@@ -453,13 +665,12 @@ class TaskSubscriber(Node):
         
         for i, (cos_val, idx) in enumerate(zip(sorted_cos_sim.tolist(), sorted_idx.tolist())):
             
-            obj_min_x = -self.obj_map[idx].bbox_2d.min_bound[0]
-            obj_min_y = -self.obj_map[idx].bbox_2d.min_bound[1]
+            obj_min_x = self.obj_map[idx].bbox_2d.min_bound[0]
+            obj_min_y = self.obj_map[idx].bbox_2d.min_bound[1]
 
-            obj_max_x = -self.obj_map[idx].bbox_2d.max_bound[0]
-            obj_max_y = -self.obj_map[idx].bbox_2d.max_bound[1]
+            obj_max_x = self.obj_map[idx].bbox_2d.max_bound[0]
+            obj_max_y = self.obj_map[idx].bbox_2d.max_bound[1]
 
-            # TODO: 确定世界坐标系的转换
             if not (min_x <= obj_min_x <= max_x and
                     min_y <= obj_min_y <= max_y and
                     min_x <= obj_max_x <= max_x and
@@ -487,148 +698,6 @@ class TaskSubscriber(Node):
 
                 return corner_list
 
-        ## Get top k candidates
-        # top_k = len(cos_sim)
-        # top_k_cos_sim, top_k_idx = torch.topk(cos_sim, top_k, dim=0)
-        # print("Most similar object:")
-        # for i, (cos_val, idx) in enumerate(zip(top_k_cos_sim.tolist(), top_k_idx.tolist())):
-
-        #     bbox_2d = self.obj_map[idx].bbox_2d
-        #     min_x = bbox_2d.min_bound[0]
-        #     min_y = bbox_2d.min_bound[1]
-
-        #     max_x = bbox_2d.max_bound[0]
-        #     max_y = bbox_2d.max_bound[1]
-
-        #     left_down_map = transfromPos(np.array([min_x, min_y]))
-        #     right_down_map = transfromPos(np.array([max_x, min_y]))
-        #     left_up_map = transfromPos(np.array([max_x, max_y]))
-        #     right_up_map = transfromPos(np.array([min_x, max_y]))
-
-        #     print(f"{i+1}. No. {idx} : {cos_val:.3f}")
-        #     print(
-        #         f"{self.obj_map[idx].class_name}, position {self.obj_map[idx].bbox_2d}, path {self. obj_map[idx].save_path}"
-        #     )
-
-        #     print("corners")
-        #     print(left_down_map)
-        #     print(right_down_map)
-        #     print(left_up_map)
-        #     print(right_up_map)
-        #     corner_list = [left_down_map, right_down_map, left_up_map, right_up_map]
-
-        #     return corner_list
-        
-    def get_room_edge(self, room_class: str):
-        room_edge = self.room_edges[room_class]
-        points = []
-
-        for edge in room_edge:
-            x, y = edge
-            map_x = int((x - self.latest_costmap.info.origin.position.x) / self.latest_costmap.info.resolution)
-            map_y = int((y - self.latest_costmap.info.origin.position.y) / self.latest_costmap.info.resolution)
-            points.append((map_x, map_y))
-        
-        # 获取房间区域内的所有点
-        min_x = min(p[0] for p in points)
-        max_x = max(p[0] for p in points)
-        min_y = min(p[1] for p in points)
-        max_y = max(p[1] for p in points)
-
-        return [min_x, max_x, min_y, max_y]
-    
-    def get_free_space(self, edge_points):
-        min_x, max_x, min_y, max_y = edge_points
-
-        # 计算房间中心点
-        center_x = (min_x + max_x) / 2
-        center_y = (min_y + max_y) / 2
-        
-        # 提取房间区域内的 costmap 数据
-        for y in range(min_y, max_y):
-            for x in range(min_x, max_x):
-                idx = y * self.latest_costmap.info.width + x
-                if idx < len(self.latest_costmap.data) and self.latest_costmap.data[idx] == 0:
-                    # 将网格坐标转换回世界坐标
-                    world_x = x * self.latest_costmap.info.resolution + self.latest_costmap.info.origin.position.x
-                    world_y = y * self.latest_costmap.info.resolution + self.latest_costmap.info.origin.position.y
-
-                    # 计算到中心点的距离
-                    dist = (x - center_x) ** 2 + (y - center_y) ** 2
-                    if dist < min_dist:
-                        min_dist = dist
-                        best_point = (world_x, world_y)
-        
-        return best_point
- 
-        
-    def recovery_clip(self, room_class: str):
-        self.recovery_cnt += 1
-        if self.recovery_cnt > 3:
-            return None
-        
-        edge_points = self.get_room_edge(room_class)
-        
-        self.position_x = self.latest_pose.pose.position.x
-        self.position_y = self.latest_pose.pose.position.y
-
-        min_x, max_x, min_y, max_y = edge_points
-
-        if min_x <= self.position_x <= max_x and min_y <= self.position_y <= max_y:
-            # 如果已经在房间内了
-            anchor_point = [self.position_x, self.position_y]
-        else:
-            # 如果不在房间内，则寻找房间中心的一个点
-            anchor_point = self.get_free_space(edge_points)
-
-        print(f"==> recovery room name {room_class}")
-        print(f"==> recovery object {anchor_point}")
-
-        # TODO: 后续改为判定转圈结束
-        is_remap = True
-        if is_remap:
-            self.load_results()
-
-            self.get_recovery_target()
-
-            if self.related_object_name != "None":
-                self.get_recovery_related_obj()
-            
-        # TODO: 后续打包这两个物体结果给nav模块
-        
-        
-
-    def get_recovery_target(self):
-
-        corner_list = self.query_callback(self.target_name)
-        target_position = np.array(corner_list).mean(axis=0)
-        print(f"[query] target position: {target_position}")
-        target_x = target_position[0]
-        target_y = target_position[1]
-        target_yaw = 0.0  
-        frame_id = "map"
-        wait_timeout = 5.0
-
-        self.send_goal(target_x, target_y, target_yaw, frame_id, wait_timeout)
-
-        print("==============================")
-
-
-    def get_recovery_related_obj(self):
-
-        related_corner_list = self.query_callback(self.related_object_name)
-        print(f"[query] related object: {self.related_object_name}")
-        related_position = np.array(related_corner_list).mean(axis=0)
-
-
-
-
-def transfromPos(position: np.array) -> np.array:
-    """
-    输入为dualmap世界坐标系读出的坐标，返回gazebo坐标系下的坐标
-    """
-    # return np.array([position[1], -position[0], -position[2]])
-    return np.array([position[1], -position[0]])
 
 
 def pop_hazard2yaml(corners: list):
@@ -673,7 +742,7 @@ if __name__ == "__main__":
     import yaml
     from pathlib import Path
 
-    cfg_path = "/home/tang123/DualMap/config/query_config.yaml"
+    cfg_path = "/home/cycl/code_workspace/DualMap/config/query_config.yaml"
     try:
         main(cfg_path)
     finally:
