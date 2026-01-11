@@ -108,7 +108,9 @@ class RunnerROSBase:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         return img
 
-    def ensure_resolution(self, rgb_img, depth_img, target_h=720, target_w=1280):
+    def ensure_resolution(
+        self, rgb_img, depth_img, target_h=720, target_w=1280
+    ):
         """
         Ensure RGB and depth images are resized to (target_h, target_w).
         如果分辨率不是 target_h x target_w，则缩放到对应大小。
@@ -222,13 +224,14 @@ class RunnerROSBase:
             return
 
         data_input = self.synced_data_queue[-1]
+        data_input.time_stamp = time.time()
 
         # 如果不是进入路径搜索模式, 看一下需不需要关闭程序
         if not self.dualmap.calculate_path:
             current_time = current_time_fn()
             last_time = self.last_message_time
             if self.cfg.use_end_process and last_time is not None:
-                if current_time - last_time > 5.0:
+                if current_time - last_time > 10.0:
                     self.logger.warning(
                         "[Main] No new data received. Entering end process."
                     )
@@ -240,6 +243,7 @@ class RunnerROSBase:
         if not self.dualmap.check_keyframe(
             data_input.time_stamp, data_input.pose
         ):
+            self.logger.info("[check_keyframe] Skip: not keyframe")
             return
 
         # 得到对于dualmap, 这是第几个关键帧
@@ -260,4 +264,7 @@ class RunnerROSBase:
             "[Main] Processing keyframe %s took %.2f seconds.",
             data_input.idx,
             time.time() - data_input.time_stamp,
+        )
+        self.logger.info(
+            "[Main Finished This Frame] ========================================"
         )

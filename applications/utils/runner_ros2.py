@@ -113,9 +113,9 @@ class RunnerROS2(Node, RunnerROSBase):
         depth_img = self.process_depth_image(depth_img, depth_factor)
 
         # 上下翻转 RGB 与深度图
-        if self.cfg.rgb_need_flip:
+        if self.dataset_cfg.rgb_need_flip:
             rgb_img = self.flip_vertical(rgb_img)
-        if self.cfg.depth_need_flip:
+        if self.dataset_cfg.depth_need_flip:
             depth_img = self.flip_vertical(depth_img)
 
         translation = np.array(

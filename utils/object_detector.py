@@ -197,6 +197,10 @@ class Detector:
                     self.yolo: YOLO = YOLO(cfg.yolo.model_path)
                     names = self.obj_classes.get_classes_arr()
                     self.yolo.set_classes(names, self.yolo.get_text_pe(names))
+                else:
+                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
+                    names = self.obj_classes.get_classes_arr()
+                    self.yolo.set_classes(names, self.yolo.get_text_pe(names))
             except Exception as e:
                 logger.error(f"[Detector][Init] Error loading YOLO model: {e}")
                 return
@@ -902,6 +906,8 @@ class Detector:
             if yolo_name == "yolov8l-world.pt":
                 self.process_yolo_and_sam(color)
             elif yolo_name == "yoloe-v8l-seg.pt":
+                self.process_yolo_without_sam(color)
+            else:
                 self.process_yolo_without_sam(color)
 
             # Waiting for FastSAM to finish
