@@ -189,18 +189,32 @@ class Detector:
                 logger.info(
                     f"[Detector][Init] Loading YOLO model from\t{cfg.yolo.model_path}"
                 )
-                yolo_name:str = cfg.yolo.model_path.split('/')[-1]
+                yolo_name: str = cfg.yolo.model_path.split("/")[-1]
+
+                # 创建模型实例
+                self.yolo: YOLO = YOLO(cfg.yolo.model_path)
+
+                # 根据不同权重设置类别/文本编码
                 if yolo_name == "yolov8l-world.pt":
-                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
                     self.yolo.set_classes(self.obj_classes.get_classes_arr())
                 elif yolo_name == "yoloe-v8l-seg.pt":
-                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
                     names = self.obj_classes.get_classes_arr()
                     self.yolo.set_classes(names, self.yolo.get_text_pe(names))
                 else:
-                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
                     names = self.obj_classes.get_classes_arr()
                     self.yolo.set_classes(names, self.yolo.get_text_pe(names))
+
+                # 将YOLO模型移动到指定device（与CLIP一致）
+                try:
+                    self.yolo.to(cfg.device)
+                    logger.info(
+                        f"[Detector][Init] YOLO model moved to device: {cfg.device}"
+                    )
+                except Exception as e_dev:
+                    logger.warning(
+                        f"[Detector][Init] Failed to move YOLO to device '{cfg.device}', "
+                        f"fallback to default device. Error: {e_dev}"
+                    )
             except Exception as e:
                 logger.error(f"[Detector][Init] Error loading YOLO model: {e}")
                 return
@@ -705,7 +719,7 @@ class Detector:
     def process_yolo_results_with_masks(self, color, obj_classes):
         """运行YOLO并返回bbox和已经resize到原图尺寸的mask。"""
         # Perform YOLO prediction(执行YOLO预测)
-        results = self.yolo.predict([color], conf=0.5, verbose=False)
+        results = self.yolo.predict([color], conf=0.5, verbose=False, device = "cpu")
 
         # Extract confidence scores(提取置信度分数)
         confidence_tensor = results[0].boxes.conf
@@ -1947,8 +1961,8 @@ class Filter:
             # 每次更新检测时计算交集
             N = self.get_len()
             # Convert masks to PyTorch tensors to accelerate computation
-            # Compute pairwise intersection using matrix operations
             # 将掩码转换为PyTorch张量以加速计算
+            # Compute pairwise intersection using matrix operations
             # 使用矩阵运算计算成对交集
 
             device = self.device

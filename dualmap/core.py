@@ -66,6 +66,7 @@ class Dualmap:
         # Keyframe Selection
         self.curr_frame_id: int = 0
         self.keyframe_counter = 0
+        self.skipped_keyframe_counter = 0
         self.last_keyframe_time = None
         self.last_keyframe_pose = None
         self.time_threshold = cfg.time_threshold
@@ -242,12 +243,15 @@ class Dualmap:
         if is_keyframe:
             self.keyframe_counter += 1
             logger.info(
-                "[Core][CheckKeyframe] Current frame is keyframe: %s",
-                self.keyframe_counter,
+                f"[Core][CheckKeyframe] Current frame is keyframe: {self.keyframe_counter}"
             )
             return True
         else:
             # logger.info("Not a new keyframe, abandon")
+            self.skipped_keyframe_counter += 1
+            logger.info(
+                f"[Core][CheckKeyframe] Current skipped_keyframe id is: {self.skipped_keyframe_counter}"
+            )
             return False
 
     def get_total_memory_by_keyword(self, keyword="applications"):
@@ -613,7 +617,7 @@ class Dualmap:
                 # Get detection results from queue
                 # logger.info(f"Queue length: {len(self.detection_results_queue)}")
                 curr_obs_list = []
-                curr_frame_id =0
+                curr_frame_id = 0
                 logger.info(
                     f"[Core][ony_search_mapping_thread] Received data for frame {curr_frame_id},"
                     " Queue size {self.detection_results_queue.qsize()}"
@@ -624,7 +628,7 @@ class Dualmap:
 
                 # Detection Visualization
                 # if self.cfg.use_rerun:
-                    # self.detector.visualize_detection()
+                # self.detector.visualize_detection()
                 # self.detector.update_data()
 
                 # Local Mapping
@@ -634,11 +638,15 @@ class Dualmap:
 
                 # Get global observations
                 with timing_context("Global Mapping", self):
-                    global_obs_list = self.local_map_manager.get_global_observations()
+                    global_obs_list = (
+                        self.local_map_manager.get_global_observations()
+                    )
                     self.local_map_manager.clear_global_observations()
 
                     # Global Mapping
-                    self.global_map_manager.process_observations(global_obs_list)
+                    self.global_map_manager.process_observations(
+                        global_obs_list
+                    )
 
                 # Get memory usage statistics of local and global maps
                 # mem_stats = get_map_memory_usage(self.local_map_manager.local_map,
