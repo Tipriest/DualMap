@@ -94,11 +94,11 @@ class TaskSubscriber(Node):
         self.hazard_subscription = self.create_subscription(
             String, "semantic_hazard", self._hazard_cb, 10, callback_group=self._cbg
         )
-        self.costmap_sub = self.create_subscription(
-            OccupancyGrid, "/global_map/cost_map", self.costmap_callback, 10, callback_group=self._cbg
-        )
         self.position_sub = self.create_subscription(
             Odometry, "/odom", self.position_callback, 10, callback_group=self._cbg
+        )
+        self.map_sub = self.create_subscription(
+            OccupancyGrid, "/map", self.map_callback, 10, callback_group=self._cbg
         )
 
         # ====== Nav2 Action Client ======
@@ -141,6 +141,11 @@ class TaskSubscriber(Node):
         self.target_x = None
         self.target_y = None
 
+        # ====== 地图变量 ======
+        self.map_data = None
+        self.map_info = None
+        self.map_received = False
+
         self.require_room_filter = True   # 强制要求目标必须在房间bbox内
         self.room_wait_timeout = 3.0      # 等 room topic 的最大时间（秒）
 
@@ -153,8 +158,146 @@ class TaskSubscriber(Node):
 
     # ====================== 回调：只做轻量更新 ======================
 
-    def costmap_callback(self, msg: OccupancyGrid):
-        self.latest_costmap = msg
+    def map_callback(self, msg: OccupancyGrid):
+        '''
+        Docstring for map_callback
+        
+        处理map数据，更新 map_data 和 map_info
+        '''
+        try:
+            width = msg.info.width
+            height = msg.info.height
+            resolution = msg.info.resolution
+
+            origin_x = msg.info.origin.position.x
+            origin_y = msg.info.origin.position.y
+
+            data = np.array(msg.data, dtype=np.int8).reshape((height, width))
+
+            with self._lock:
+                self.map_data = data
+                self.map_info = {
+                    "width": width,
+                    "height": height,
+                    "resolution": resolution,
+                    "origin_x": origin_x,
+                    "origin_y": origin_y
+                }
+                self.map_received = True
+
+        except Exception as e:
+            self.get_logger().error(f"Error in map_callback: {e}")
+
+
+    def world_to_map(self, x: float, y: float) -> Tuple[int, int]:
+        """
+        将世界坐标转换为地图坐标
+        """
+        if self.map_info is None:
+            return 0, 0
+            
+        resolution = self.map_info['resolution']
+        origin_x = self.map_info['origin_x']
+        origin_y = self.map_info['origin_y']
+        
+        mx = int((x - origin_x) / resolution)
+        my = int((y - origin_y) / resolution)
+        
+        return mx, my
+    
+    def map_to_world(self, mx: int, my: int) -> Tuple[float, float]:
+        """
+        将地图坐标转换为世界坐标
+        """
+        if self.map_info is None:
+            return 0.0, 0.0
+            
+        resolution = self.map_info['resolution']
+        origin_x = self.map_info['origin_x']
+        origin_y = self.map_info['origin_y']
+        
+        wx = mx * resolution + origin_x
+        wy = my * resolution + origin_y
+        
+        return wx, wy
+    
+    def is_free_cell(self, mx: int, my: int) -> bool:
+        """
+        判断地图上的某个点是否空闲
+        0: 空闲, -1: 未知, 100: 障碍物
+        """
+        if self.map_data is None:
+            return False
+            
+        height, width = self.map_data.shape
+        if 0 <= mx < width and 0 <= my < height:
+            value = self.map_data[my, mx]
+            # 0表示空闲，其他值表示障碍物或未知
+            return value == 0
+        return False
+    
+    def find_nearest_free_point(self, target_x: float, target_y: float, search_radius: float = 0.8) -> Tuple[Optional[float], Optional[float]]:
+        """
+        在地图上寻找距离目标点指定半径内的最近空闲点
+        """
+        with self._lock:
+            if not self.map_received or self.map_data is None or self.map_info is None:
+                self.get_logger().warn("Map not received yet, cannot find free point")
+                return target_x, target_y  # 返回原始目标点
+            
+            map_data = self.map_data.copy()
+            map_info = self.map_info.copy()
+        
+        resolution = map_info['resolution']
+        
+        # 转换目标点到地图坐标
+        target_mx, target_my = self.world_to_map(target_x, target_y)
+        
+        # 计算搜索半径对应的地图格子数
+        search_cells = int(search_radius / resolution)
+        
+        # 从内向外搜索空闲点
+        for radius in range(0, search_cells + 1):
+            free_points = []
+            
+            # 搜索当前半径内的所有点
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    # 检查是否在半径内
+                    if dx*dx + dy*dy > radius*radius:
+                        continue
+                    
+                    mx = target_mx + dx
+                    my = target_my + dy
+                    
+                    # 检查是否在地图范围内
+                    if 0 <= mx < map_info['width'] and 0 <= my < map_info['height']:
+                        if map_data[my, mx] == 0:  # 空闲点
+                            free_points.append((mx, my))
+            
+            # 如果有空闲点，找到最近的一个
+            if free_points:
+                # 计算每个点到目标点的距离，选择最近的
+                distances = []
+                for mx, my in free_points:
+                    dist = math.sqrt((mx - target_mx)**2 + (my - target_my)**2)
+                    distances.append((dist, mx, my))
+                
+                # 按距离排序
+                distances.sort(key=lambda x: x[0])
+                nearest_mx, nearest_my = distances[0][1], distances[0][2]
+                
+                # 转换回世界坐标
+                free_x, free_y = self.map_to_world(nearest_mx, nearest_my)
+                
+                distance_world = math.sqrt((free_x - target_x)**2 + (free_y - target_y)**2)
+                self.get_logger().info(f"Found free point at ({free_x:.3f}, {free_y:.3f}), "
+                                      f"distance from target: {distance_world:.3f}m")
+                return free_x, free_y
+        
+        # 没有找到空闲点，返回原始目标点
+        self.get_logger().warn(f"No free point found within {search_radius}m radius, using original target")
+        return target_x, target_y
 
     def position_callback(self, msg: Odometry):
         x = msg.pose.pose.position.x
@@ -283,6 +426,9 @@ class TaskSubscriber(Node):
                 target_pos = np.array(corners).mean(axis=0)
                 target_x, target_y = float(target_pos[0]), float(target_pos[1])
 
+                # FLAG: 查找距离最近的空闲点
+                free_x, free_y = self.find_nearest_free_point(target_x, target_y, 0.8)
+
                 with self._lock:
                     self.target_x = target_x
                     self.target_y = target_y
@@ -294,23 +440,39 @@ class TaskSubscriber(Node):
                     rcorners = self.query_callback(related_name)
                     if rcorners is None:
                         self.get_logger().warn(f"Related '{related_name}' not found, fallback to direct target.")
-                        ok = self._goto_and_face_target(target_x, target_y)
+                        
+                        # FLAG: 导航到最近的点
+                        # ok = self._goto_and_face_target(target_x, target_y)
+                        ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
                     else:
                         rpos = np.array(rcorners).mean(axis=0)
                         rx, ry = float(rpos[0]), float(rpos[1])
 
+                        # FLAG: 导航到最近的相关空闲点
+                        free_rx, free_ry = self.find_nearest_free_point(rx, ry, 0.8)
+
                         # DEBUG: 可以在此处硬赋值related 坐标
                         self.get_logger().info(f"[query] related '{related_name}' -> ({rx:.3f}, {ry:.3f})")
+                        self.get_logger().warn(f"goto related point: ({free_rx:.3f}, {free_ry:.3f})")
 
-                        ok = self._goto_point(rx, ry, yaw=-1.57, frame_id="map", wait_timeout=5.0)
+                        # FLAG: 导航到最近的相关空闲点
+                        # ok = self._goto_point(rx, ry, yaw=0, frame_id="map", wait_timeout=5.0)
+                        ok = self._goto_point(free_rx, free_ry, yaw=0, frame_id="map", wait_timeout=5.0)
+
                         if ok:
-                            ok = self._face_target(target_x, target_y)
+                            if np.sqrt(np.sum((self.current_x - self.target_x) ** 2 + (self.current_y - self.target_y) ** 2)) < 0.8:
+                                # 已经到达范围
+                                ok = self._face_target(target_x, target_y)
+                            else:
+                                self.get_logger().warn("Too far away from target, fallback to direct target.")
+                                ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
+
                         else:
                             self.get_logger().warn("Goto related failed, fallback to direct target.")
-                            ok = self._goto_and_face_target(target_x, target_y)
+                            ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
 
                 else:
-                    ok = self._goto_and_face_target(target_x, target_y)
+                    ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
 
                 # 3. 检查任务完成（非阻塞：在 worker 线程里允许 input）
                 if ok:
@@ -328,9 +490,9 @@ class TaskSubscriber(Node):
             except Exception as e:
                 self.get_logger().error(f"Worker exception: {repr(e)}")
 
-    def _goto_and_face_target(self, tx: float, ty: float) -> bool:
+    def _goto_and_face_target(self, free_x:float, free_y:float, tx: float, ty: float) -> bool:
         # 先去目标点，再原地转向
-        ok = self._goto_point(tx, ty, yaw=0.0, frame_id="map", wait_timeout=5.0)
+        ok = self._goto_point(free_x, free_y, yaw=0.0, frame_id="map", wait_timeout=5.0)
         if not ok:
             return False
         return self._face_target(tx, ty)
@@ -580,6 +742,7 @@ class TaskSubscriber(Node):
         while cnt < 3:
         # 重新尝试检索+导航若干次
             self.get_logger().warn(f"Recovery try {cnt+1}/3 ...")
+            # TODO: 重新load remap后的结果
             corners = self.query_callback(target_name)
             if corners is None:
                 self.turn_around()
@@ -589,7 +752,12 @@ class TaskSubscriber(Node):
 
                 pos = np.array(corners).mean(axis=0)
                 tx, ty = float(pos[0]), float(pos[1])
-                ok = self._goto_and_face_target(tx, ty)
+
+                # 重新导航到目标位置
+                free_recovery_x, free_recovery_y = self.find_nearest_free_point(tx, ty, 0.8)
+                self.get_logger().info(f"Recovery to {free_recovery_x:.1f}, {free_recovery_y:.1f}")
+
+                ok = self._goto_and_face_target(free_recovery_x, free_recovery_y, tx, ty)
                 if ok:
                     self.get_logger().info("Recovery navigation success.")
                     return
