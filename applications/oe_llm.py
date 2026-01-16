@@ -175,7 +175,7 @@ def task_extract():
         task_pub.publish_related_obj(related_object)
         print(f"Published related object: {related_object}")
 
-        # 确保offline部分先拿到物体的变量
+        # 确保offline部分先拿到相关物体的变量
         time.sleep(2)
 
     if target_name != "None":
@@ -193,10 +193,10 @@ def fake_task_extract():
     rclpy.init()
     task_pub = TaskPublisher()
     # 现在可以安全访问字典了
-    target_room = "bed room"
-    target_name = "carpet"
+    target_room = "bedroom"
+    target_name = "target"
     related_object = "bed"
-    avoid_hazard = "carpet"
+    avoid_hazard = "None"
 
     # TODO: 这里有room没有确定对面已经接到了
     if target_room != "None":
@@ -207,12 +207,12 @@ def fake_task_extract():
         task_pub.publish_related_obj(related_object)
         print(f"Published related object: {related_object}")
 
-        # 确保offline部分先拿到物体的变量
+        # 确保offline部分先拿到相关物体的变量
         time.sleep(2)
 
-    if target_name != "None":
-        task_pub.publish_task(target_name)
-        print(f"Published target name: {target_name}")
+
+    task_pub.publish_task(target_name)
+    print(f"Published target name: {target_name}")
 
     if avoid_hazard != "None":
         task_pub.publish_hazard(avoid_hazard)

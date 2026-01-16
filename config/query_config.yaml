@@ -3,5 +3,16 @@ defaults:
   - _self_
 
 map_dir: ${output_path}/${dataset_name}_${scene_id}/map
-# test_map_dir: /home/tang123/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/global_map
-test_map_dir: /home/tipriest/Documents/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/20251225_210242/global_map
+
+load_dir: /home/cycl/code_workspace/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/20260114_231111/global_map
+
+
+# TODO: 重建图后的reload位置
+reload_dir: /home/cycl/code_workspace/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/reload/global_map
+
+
+# 房间边界定义 [min_x, max_x, min_y, max_y]
+room_edges:
+  bedroom: [1.65, 6.45, -4.4, -0.8]
+  studyroom: [1.8, 6.6, 0.7, 3.1]
+  livingroom: [-5.0, 1.65, -4.4, 3.1]

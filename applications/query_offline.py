@@ -29,6 +29,7 @@ from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid, Odometry
 from action_msgs.msg import GoalStatus, GoalStatusArray
+from rclpy.action.client import ClientGoalHandle
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))        # applications/
 PROJECT_ROOT = os.path.dirname(PROJECT_ROOT)                    # DualMap/
@@ -72,11 +73,13 @@ def quat_to_yaw(qx, qy, qz, qw) -> float:
 
 
 class TaskSubscriber(Node):
-    def __init__(self, cfg_path: str, load_dir: str):
+    def __init__(self, cfg_path: str):
         super().__init__("nav2_goal_sender")
 
         with open(cfg_path, "r") as f:
             self.cfg = yaml.safe_load(f)
+
+        self.load_dir = self.cfg["load_dir"]
 
         # ====== callback group：允许并发回调（配合 MultiThreadedExecutor）======
         self._cbg = ReentrantCallbackGroup()
@@ -106,7 +109,6 @@ class TaskSubscriber(Node):
         self._client = ActionClient(self, NavigateToPose, self._action_name, callback_group=self._cbg)
 
         # ====== 运行数据 ======
-        self.load_dir = load_dir
         self.target_name: Optional[str] = None
         self.related_object_name: Optional[str] = None
         self.obj_map = None
@@ -126,12 +128,10 @@ class TaskSubscriber(Node):
         self.room_bbox = None
         self.is_room_ready = False
 
-        # CFG: 标定好房屋边缘
-        self.room_edges = {
-            "bedroom": [1.65, 6.45, -4.4, -0.8],
-            "studyroom": [1.8, 6.6, 0.7, 3.1],
-            "livingroom": [-5.0, 1.65, -4.4, 3.1]
-        }
+        # ====== 从配置文件读取房间边界 ======
+        if 'room_edges' in self.cfg:
+            self.room_edges = self.cfg['room_edges']
+            self.get_logger().info(f"Loaded room edges from config: {list(self.room_edges.keys())}")
 
         # ====== 流程控制（线程安全） ======
         self._lock = threading.Lock()
@@ -149,6 +149,15 @@ class TaskSubscriber(Node):
 
         self.require_room_filter = True   # 强制要求目标必须在房间bbox内
         self.room_wait_timeout = 3.0      # 等 room topic 的最大时间（秒）
+
+        # ====== 截断机制相关 ======
+        self._truncate_distance = 1.0  # 截断距离：1.2米
+        self._current_goal_handle: Optional[ClientGoalHandle] = None
+        self._current_nav_thread = None
+        self._truncate_enabled = False  # 是否启用截断
+        self._truncate_check_interval = 0.2  # 截断检查间隔（秒）
+        self._truncate_timer = None
+        self._arrived_dist = 1.0  # 到达目标点距离（米）
 
         # 主线程，开始检索，分配状态机
         self._worker = threading.Thread(target=self._task_worker, daemon=True)
@@ -429,6 +438,100 @@ class TaskSubscriber(Node):
         if t - self._last_odom_print_t > 0.5:
             self._last_odom_print_t = t
 
+            # 检查是否应该截断
+            if self._truncate_enabled and self.target_x is not None and self.target_y is not None:
+                distance = self.calculate_distance_to_target()
+                if distance < self._truncate_distance:
+                    self.get_logger().info(f"Distance to target ({distance:.2f}m) < {self._truncate_distance}m, triggering truncation...")
+                    self._truncate_navigation()
+
+    def calculate_distance_to_target(self) -> float:
+        """计算当前位置到目标点的距离"""
+        if self.target_x is None or self.target_y is None:
+            return float('inf')
+        
+        dx = self.current_x - self.target_x
+        dy = self.current_y - self.target_y
+        return math.sqrt(dx*dx + dy*dy)
+
+    def _truncate_navigation(self):
+        """截断当前导航任务"""
+        if not self._truncate_enabled:
+            return
+            
+        with self._lock:
+            current_goal_handle = self._current_goal_handle
+        
+        if current_goal_handle is not None:
+            # 取消当前目标
+            self.get_logger().info("Cancelling current navigation goal due to truncation...")
+            cancel_future = current_goal_handle.cancel_goal_async()
+            
+            def _on_cancel_complete(future):
+                try:
+                    result = future.result()
+                    if result:
+                        self.get_logger().info("Navigation goal cancelled successfully")
+                    else:
+                        self.get_logger().warn("Failed to cancel navigation goal")
+                except Exception as e:
+                    self.get_logger().error(f"Exception while cancelling goal: {e}")
+                
+                # 立即执行面向目标操作
+                self._execute_truncated_face_target()
+            
+            cancel_future.add_done_callback(_on_cancel_complete)
+        else:
+            # 如果没有活动的目标句柄，直接执行面向目标操作
+            self._execute_truncated_face_target()
+
+    def _execute_truncated_face_target(self):
+        """执行截断后的面向目标操作"""
+        self.get_logger().info("Executing face target after truncation...")
+        
+        # 停止截断检查
+        self._stop_truncate_check()
+        
+        # 在新的线程中执行面向目标操作，避免阻塞
+        face_thread = threading.Thread(
+            target=self._truncated_face_target_impl,
+            daemon=True
+        )
+        face_thread.start()
+
+    def _truncated_face_target_impl(self):
+        """截断后面向目标的具体实现"""
+        if self.target_x is None or self.target_y is None:
+            self.get_logger().warn("Cannot face target: target coordinates not available")
+            return
+        
+        # 等待一小段时间确保导航已停止
+        time.sleep(0.5)
+        
+        # 计算并执行转向
+        delta_yaw = self.calculate_yaw_to_target(self.target_x, self.target_y)
+        target_yaw = self.current_yaw + delta_yaw
+        
+        self.get_logger().info(f"Truncation: facing target with delta_yaw={delta_yaw:.3f}")
+        
+        # 发送转向命令
+        ok = self._goto_point(
+            self.current_x, 
+            self.current_y, 
+            yaw=target_yaw, 
+            frame_id="map", 
+            wait_timeout=3.0,
+            is_truncated=True  # 标记这是截断后的操作
+        )
+        
+        if ok:
+            self.get_logger().info("Truncation face target completed successfully")
+            
+            # 触发任务检查
+            self._task_event.set()
+        else:
+            self.get_logger().warn("Truncation face target failed")
+
     def _room_cb(self, msg: String):
         room = msg.data
         bbox = self.query_room_callback(room)
@@ -472,6 +575,8 @@ class TaskSubscriber(Node):
     def request_exit(self, reason: str = ""):
         self.get_logger().warn(f"Request exit. reason={reason}")
         self._shutdown_event.set()
+        # 停止截断检查
+        self._stop_truncate_check()
         # 让 spin() 退出
         try:
             rclpy.shutdown()
@@ -560,6 +665,7 @@ class TaskSubscriber(Node):
                         # FLAG: 导航到最近的点
                         # ok = self._goto_and_face_target(target_x, target_y)
                         ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
+                        # ok = self._goto_and_face_target(target_x, target_y, target_x, target_y)
                     else:
                         rpos = np.array(rcorners).mean(axis=0)
                         rx, ry = float(rpos[0]), float(rpos[1])
@@ -572,11 +678,13 @@ class TaskSubscriber(Node):
                         self.get_logger().warn(f"goto related point: ({free_rx:.3f}, {free_ry:.3f})")
 
                         # FLAG: 导航到最近的相关空闲点
-                        ok = self._goto_point(rx, ry, yaw=0, frame_id="map", wait_timeout=5.0)
-                        # ok = self._goto_point(free_rx, free_ry, yaw=0, frame_id="map", wait_timeout=5.0)
+                        # DEBUG: 截断面向target，不会对related进行判断，此处还是有风险进入膨胀层
+                        # ok = self._goto_point(rx, ry, yaw=0, frame_id="map", wait_timeout=5.0)
+                        ok = self._goto_point(free_rx, free_ry, yaw=0, frame_id="map", wait_timeout=5.0)
 
                         if ok:
-                            if np.sqrt(np.sum((self.current_x - self.target_x) ** 2 + (self.current_y - self.target_y) ** 2)) < 0.5:
+                            # 已经到达相关物体点
+                            if np.sqrt(np.sum((self.current_x - self.target_x) ** 2 + (self.current_y - self.target_y) ** 2)) < self._arrived_dist:
                                 # 已经到达范围
                                 ok = self._face_target(target_x, target_y)
                             else:
@@ -584,13 +692,15 @@ class TaskSubscriber(Node):
                                 ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
 
                         else:
+                            # 无法到达相关物体，回退直去目标物体
                             self.get_logger().warn("Goto related failed, fallback to direct target.")
                             ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
 
                 else:
+                    # 没有相关物体，直接去目标物体
                     ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
 
-                # 3. 检查任务完成（非阻塞：在 worker 线程里允许 input）
+                # 检查任务完成（非阻塞：在 worker 线程里允许 input）
                 if ok:
                     is_complete = self.check_task()
                     if not is_complete:
@@ -599,6 +709,7 @@ class TaskSubscriber(Node):
                     else:
                         self.request_exit("task complete")
                 else:
+                    # 目标物体没成功到达
                     self.get_logger().warn("Navigation failed -> enter recovery")
                     self.run_recovery(target_name)
                     self.request_exit("recovery finished after nav failed")
@@ -624,7 +735,19 @@ class TaskSubscriber(Node):
 
     # ====================== Nav2 Action：异步 + Event 等待 ======================
 
-    def _goto_point(self, x: float, y: float, yaw: float, frame_id: str, wait_timeout: float) -> bool:
+    def _start_truncate_check(self):
+        """启动截断检查"""
+        self._truncate_enabled = True
+        self.get_logger().info(f"Truncation enabled with distance threshold: {self._truncate_distance}m")
+
+    def _stop_truncate_check(self):
+        """停止截断检查"""
+        self._truncate_enabled = False
+        if self._truncate_timer is not None:
+            self._truncate_timer.cancel()
+            self._truncate_timer = None
+
+    def _goto_point(self, x: float, y: float, yaw: float, frame_id: str, wait_timeout: float, is_truncated: bool = False) -> bool:
         """
         发送 NavigateToPose 并等待 result（线程里 wait，不阻塞 ROS 回调线程）。
         """
@@ -667,6 +790,12 @@ class TaskSubscriber(Node):
 
                 result_holder["accepted"] = True
                 self.get_logger().info("Goal accepted. Waiting result...")
+                
+                # 如果不是截断后的操作，保存目标句柄并启动截断检查
+                if not is_truncated:
+                    with self._lock:
+                        self._current_goal_handle = gh
+                    self._start_truncate_check()
 
                 rfut = gh.get_result_async()
 
@@ -678,6 +807,11 @@ class TaskSubscriber(Node):
                         else:
                             result_holder["status"] = int(res.status)
                     finally:
+                        # 清理目标句柄并停止截断检查
+                        if not is_truncated:
+                            with self._lock:
+                                self._current_goal_handle = None
+                            self._stop_truncate_check()
                         done_evt.set()
 
                 rfut.add_done_callback(_on_result)
@@ -685,6 +819,10 @@ class TaskSubscriber(Node):
             except Exception as e:
                 self.get_logger().error(f"Goal response exception: {repr(e)}")
                 result_holder["accepted"] = False
+                if not is_truncated:
+                    with self._lock:
+                        self._current_goal_handle = None
+                    self._stop_truncate_check()
                 done_evt.set()
 
         send_future = self._client.send_goal_async(goal_msg)
@@ -695,6 +833,11 @@ class TaskSubscriber(Node):
         ok = done_evt.wait(timeout=nav_timeout)
         if not ok:
             self.get_logger().error(f"Navigation timeout after {nav_timeout}s.")
+            # 清理目标句柄并停止截断检查
+            if not is_truncated:
+                with self._lock:
+                    self._current_goal_handle = None
+                self._stop_truncate_check()
             return False
 
         if result_holder["accepted"] is not True:
@@ -871,9 +1014,9 @@ class TaskSubscriber(Node):
                 tx, ty = float(pos[0]), float(pos[1])
 
                 # 重新导航到目标位置
-                # free_recovery_x, free_recovery_y = self.find_optimal_free_point_by_room_center(tx, ty, 1.0)
-                free_recovery_x = tx
-                free_recovery_y = ty
+                free_recovery_x, free_recovery_y = self.find_optimal_free_point_by_room_center(tx, ty, 1.0)
+                # free_recovery_x = tx
+                # free_recovery_y = ty
                 self.get_logger().info(f"Recovery to {free_recovery_x:.1f}, {free_recovery_y:.1f}")
 
                 ok = self._goto_and_face_target(free_recovery_x, free_recovery_y, tx, ty)
@@ -898,6 +1041,8 @@ class TaskSubscriber(Node):
     def destroy_node(self):
         self._shutdown_event.set()
         self._task_event.set()
+        # 停止截断检查
+        self._stop_truncate_check()
         super().destroy_node()
 
 
@@ -927,8 +1072,7 @@ def pop_hazard2yaml(corners: list):
 
 def main(cfg_path: str):
     rclpy.init()
-    load_dir = "/home/cycl/code_workspace/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/20260114_231111/global_map"
-    node = TaskSubscriber(cfg_path, load_dir)
+    node = TaskSubscriber(cfg_path)
 
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
