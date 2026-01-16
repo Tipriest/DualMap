@@ -94,6 +94,10 @@ class RunnerROS2(Node, RunnerROSBase):
 
     def synced_callback(self, rgb_msg, depth_msg, odom_msg):
         """Callback for synced RGB-D-Odom input."""
+        self.received_synced_num += 1
+        self.logger.warning(
+            f"[ROS][Sync][Msg Nums]: {self.received_synced_num}",
+        )
         timestamp = (
             rgb_msg.header.stamp.sec + rgb_msg.header.stamp.nanosec * 1e-9
         )
@@ -137,6 +141,9 @@ class RunnerROS2(Node, RunnerROSBase):
         pose_matrix = self.build_pose_matrix(translation, quaternion)
         self.push_data(rgb_img, depth_img, pose_matrix, timestamp)
         self.last_message_time = self.get_clock().now().nanoseconds / 1e9
+        self.logger.warning(
+            f"update last_message_time: {self.last_message_time}",
+        )
 
     def camera_info_callback(self, msg):
         """Populate intrinsics from CameraInfo topic if not already loaded."""

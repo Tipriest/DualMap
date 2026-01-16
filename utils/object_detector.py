@@ -224,7 +224,7 @@ class Detector:
                 logger.info(
                     f"[Detector][Init] Loading SAM model from\t{cfg.sam.model_path}"
                 )
-                self.sam = SAM(cfg.sam.model_path)
+                self.sam:SAM = SAM(cfg.sam.model_path)
             except Exception as e:
                 logger.error(f"[Detector][Init] Error loading SAM model: {e}")
                 return

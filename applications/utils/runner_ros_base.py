@@ -34,6 +34,7 @@ class RunnerROSBase:
         self.synced_data_queue = deque(maxlen=1)
         self.shutdown_requested = False
         self.last_message_time = None
+        self.received_synced_num: int = 0
 
     def load_intrinsics(self, dataset_cfg):
         """Load camera intrinsics from config file."""
@@ -231,14 +232,17 @@ class RunnerROSBase:
             current_time = current_time_fn()
             last_time = self.last_message_time
             if self.cfg.use_end_process and last_time is not None:
-                if current_time - last_time > 10.0:
+                if current_time - last_time > 25.0:
                     self.logger.warning(
-                        "[Main] No new data received. Entering end process."
+                        f"current_time: {current_time}, last_time: {last_time}: [Main] No new data received. Entering end process."
                     )
                     self.dualmap.end_process()
                     self.shutdown_requested = True
                     return
-
+                else:
+                    self.logger.warning(
+                        f"current_time: {current_time}, last_time: {last_time}: "
+                    )
         # 判断一下，如果不是关键帧的话也跳过
         if not self.dualmap.check_keyframe(
             data_input.time_stamp, data_input.pose
