@@ -30,7 +30,7 @@ class TaskPublisher(Node):
         msg.data = target_name
         self.publisher_target_.publish(msg)
         self.get_logger().info(f'Published target name: {msg.data}')
-    
+
     def publish_related_obj(self, related_object):
         msg = String()
         msg.data = related_object
@@ -45,12 +45,11 @@ class TaskPublisher(Node):
         self.get_logger().info(f'Published semantic hazard: {msg.data}')
 
 
-
 def task_extract():
-    
+
     rclpy.init()
     task_pub = TaskPublisher()
-    
+
     # MindIE网络服务的位置
     url = "http://127.0.0.1:1025/v1/chat/completions"
     headers = {"Content-Type": "application/json"}
@@ -76,7 +75,7 @@ def task_extract():
     输出格式：
     {{
         "target_room": "房间名称",
-        "related_object": "物品名称", 
+        "related_object": "物品名称",
         "target_object": "物品名称",
         "avoid_object": "物品名称"
     }}
@@ -120,7 +119,7 @@ def task_extract():
 
     end_time = time.time()
     print("cost time", end_time-start_time)
-    
+
     content_dict = {}
     # 解析JSON
     try:
@@ -189,6 +188,39 @@ def task_extract():
 
     rclpy.spin(task_pub)
 
+def fake_task_extract():
+
+    rclpy.init()
+    task_pub = TaskPublisher()
+    # 现在可以安全访问字典了
+    target_room = "bed room"
+    target_name = "carpet"
+    related_object = "bed"
+    avoid_hazard = "carpet"
+
+    # TODO: 这里有room没有确定对面已经接到了
+    if target_room != "None":
+        task_pub.publish_room(target_room)
+        print(f"Published target name: {target_room}")
+
+    if related_object != "None":
+        task_pub.publish_related_obj(related_object)
+        print(f"Published related object: {related_object}")
+
+        # 确保offline部分先拿到物体的变量
+        time.sleep(2)
+
+    if target_name != "None":
+        task_pub.publish_task(target_name)
+        print(f"Published target name: {target_name}")
+
+    if avoid_hazard != "None":
+        task_pub.publish_hazard(avoid_hazard)
+        print(f"Published semantic hazard: {avoid_hazard}")
+
+    rclpy.spin(task_pub)
+
 if __name__ == '__main__':
 
-    task_extract()
+    # task_extract()
+    fake_task_extract()
