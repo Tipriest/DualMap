@@ -200,6 +200,8 @@ class Detector:
                 elif yolo_name == "yoloe-v8l-seg.pt":
                     names = self.obj_classes.get_classes_arr()
                     self.yolo.set_classes(names, self.yolo.get_text_pe(names))
+                elif yolo_name == "last.pt":
+                    pass
                 else:
                     names = self.obj_classes.get_classes_arr()
                     self.yolo.set_classes(names, self.yolo.get_text_pe(names))
@@ -922,7 +924,7 @@ class Detector:
             elif yolo_name == "yoloe-v8l-seg.pt":
                 self.process_yolo_without_sam(color)
             else:
-                self.process_yolo_without_sam(color)
+                self.process_yolo_and_sam(color)
 
             # Waiting for FastSAM to finish
             if self.cfg.use_fastsam:
