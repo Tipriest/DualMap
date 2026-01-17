@@ -9,6 +9,7 @@ import numpy as np
 import open3d as o3d
 import open_clip
 import torch
+import torch_npu
 import yaml
 from omegaconf import DictConfig, OmegaConf
 from scipy.optimize import linear_sum_assignment

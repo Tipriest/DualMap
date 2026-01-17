@@ -8,6 +8,7 @@ import cv2
 import imageio
 import numpy as np
 import torch
+import torch_npu
 import yaml
 from kornia.geometry.linalg import (
     compose_transformations,

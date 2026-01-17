@@ -3,6 +3,7 @@ from collections import Counter
 import numpy as np
 import open3d as o3d
 import torch
+import torch_npu
 
 
 def mask_depth_to_points(

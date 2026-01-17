@@ -7,6 +7,7 @@ import hydra
 import numpy as np
 import open3d as o3d
 import torch
+import torch_npu
 from natsort import natsorted
 from omegaconf import DictConfig
 from plyfile import PlyData

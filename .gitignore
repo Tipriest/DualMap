@@ -19,3 +19,6 @@ __pycache__/
 *.bin
 
 .history
+
+kernel_meta/
+fusion_result.json
