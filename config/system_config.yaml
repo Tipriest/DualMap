@@ -56,16 +56,22 @@ fastsam:
 
 clip:
   _target_: _self_
-  # model_name:  MobileCLIP-S2
-  model_name: ViT-B-32
+
+
   # model_name: ViT-H-14
-  # pretrained: datacompdr
+
   # pretrained: laion2b_s32b_b79k
-  pretrained: "/data/torch_npu/open_clip/weights/ViT-B-32.pt"
+
+  # model_name:  MobileCLIP-S2
+  # pretrained: datacompdr
+
+  model_name: ViT-B-32
+  pretrained: openai
+  # pretrained: "/data/torch_npu/open_clip/weights/ViT-B-32.pt"
   clip_length: 512
   # clip_length: 1024
 
-device: npu:0
+device: npu
 
 
 # ============================================================

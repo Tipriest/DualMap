@@ -171,7 +171,7 @@ class Detector:
                     )
                 )
                 self.clip_model = self.clip_model.to(cfg.device)
-                self.clip_model.eval()
+                # self.clip_model.eval()
 
                 # Only reparameterize if the model is MobileCLIP
                 # 仅当模型为MobileCLIP时才重新参数化
@@ -2258,7 +2258,17 @@ class Detector:
     ):
         """批量计算CLIP特征。"""
         # 将图像转换为PIL图像
-        image = Image.fromarray(image)
+        # image = Image.fromarray(image)
+        # 假设 image_raw 是 np.ndarray 或 torch.Tensor
+        if isinstance(image, torch.Tensor):
+            image_np = image.detach().cpu().numpy()
+        else:
+            image_np = image
+
+        if image_np.dtype != np.uint8:
+            image_np = (np.clip(image_np, 0, 1) * 255).astype(np.uint8)
+
+        image = Image.fromarray(image_np).convert("RGB")
 
         # Set the padding for cropping(设置裁剪的填充)
         padding = 20
@@ -2299,7 +2309,7 @@ class Detector:
 
             # Preprocess the cropped image
             # 预处理裁剪的图像
-            preprocessed_image = clip_preprocess(cropped_image).unsqueeze(0)
+            preprocessed_image = clip_preprocess(cropped_image).unsqueeze(0).to(device)
             preprocessed_images.append(preprocessed_image)
 
             # Get the class id for the detection
