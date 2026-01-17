@@ -2329,6 +2329,10 @@ class Detector:
         preprocessed_images_batch = torch.cat(preprocessed_images, dim=0).to(
             device
         )
+        # 如果模型是半精度，把图像输入也转成 half
+        if next(clip_model.parameters()).dtype == torch.float16:
+            print("next(clip_model.parameters()).dtype == torch.float16")
+            preprocessed_images_batch = preprocessed_images_batch.half()
         text_tokens_batch = clip_tokenizer(text_tokens).to(device)
 
         # Perform batch inference
