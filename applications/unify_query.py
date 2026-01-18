@@ -11,6 +11,8 @@ import time
 import math
 import yaml
 import threading
+import json
+import requests
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -24,11 +26,10 @@ from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 
-from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid, Odometry
-from action_msgs.msg import GoalStatus, GoalStatusArray
+from action_msgs.msg import GoalStatus
 from rclpy.action.client import ClientGoalHandle
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))        # applications/
@@ -38,13 +39,6 @@ if PROJECT_ROOT not in sys.path:
 
 from utils.object import BaseObject
 from mobileclip.modules.common.mobileone import reparameterize_model
-
-
-def uuid_to_hex(goal_id_msg) -> str:
-    try:
-        return bytes(goal_id_msg.uuid).hex()
-    except Exception:
-        return str(goal_id_msg)
 
 
 STATUS_NAME = {
@@ -84,19 +78,6 @@ class TaskSubscriber(Node):
         # ====== callback group：允许并发回调（配合 MultiThreadedExecutor）======
         self._cbg = ReentrantCallbackGroup()
 
-        # ====== 订阅：回调里只更新数据，不做阻塞 ======
-        self.room_subscription = self.create_subscription(
-            String, "target_room", self._room_cb, 10, callback_group=self._cbg
-        )
-        self.related_obj_subscription = self.create_subscription(
-            String, "related_object", self._related_obj_cb, 10, callback_group=self._cbg
-        )
-        self.subscription = self.create_subscription(
-            String, "target_name", self._target_cb, 10, callback_group=self._cbg
-        )
-        self.hazard_subscription = self.create_subscription(
-            String, "semantic_hazard", self._hazard_cb, 10, callback_group=self._cbg
-        )
         self.position_sub = self.create_subscription(
             Odometry, "/odom", self.position_callback, 10, callback_group=self._cbg
         )
@@ -244,6 +225,99 @@ class TaskSubscriber(Node):
             return value == 0
         return False
 
+
+    def find_optimal_free_point_by_room_center(
+        self, target_x: float, target_y: float,
+        search_radius: float = 0.8
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """
+        寻找最优空闲点，优先选择距离房间中心曼哈顿距离最小的点
+        曼哈顿距离 = |dx| + |dy|，越小表示越接近房间中心/轴线
+        """
+        with self._lock:
+            if not self.map_received or self.map_data is None or self.map_info is None:
+                self.get_logger().warn("Map not received yet, cannot find free point")
+                return target_x, target_y
+
+            map_data = self.map_data.copy()
+            map_info = self.map_info.copy()
+
+            # 获取房间边界
+            room_bbox = self.room_bbox
+            is_room_ready = self.is_room_ready
+
+        # 检查房间是否准备好
+        if not is_room_ready or room_bbox is None:
+            self.get_logger().warn("Room not ready, using original target point")
+            return target_x, target_y
+
+        # 计算房间中心坐标
+        min_x, max_x, min_y, max_y = room_bbox
+        room_center_x = (min_x + max_x) / 2.0
+        room_center_y = (min_y + max_y) / 2.0
+
+        resolution = map_info["resolution"]
+
+        # 转换目标点到地图坐标
+        target_mx, target_my = self.world_to_map(target_x, target_y)
+
+        # 转换房间中心到地图坐标
+        room_center_mx, room_center_my = self.world_to_map(room_center_x, room_center_y)
+
+        # 计算搜索半径对应的地图格子数
+        search_cells = int(search_radius / resolution)
+
+        # 存储候选点：[距离房间中心的曼哈顿距离, 距离目标点的欧氏距离, mx, my]
+        candidate_points = []
+
+        # 搜索整个半径内的所有点
+        for radius in range(0, search_cells + 1):
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    if dx * dx + dy * dy > radius * radius:
+                        continue
+
+                    mx = target_mx + dx
+                    my = target_my + dy
+
+                    if 0 <= mx < map_info["width"] and 0 <= my < map_info["height"]:
+                        if map_data[my, mx] == 0:  # 空闲点
+                            # 计算到房间中心的曼哈顿距离（主要排序条件）
+                            manhattan_to_room_center = abs(mx - room_center_mx) + abs(my - room_center_my)
+
+                            # 计算到目标点的欧氏距离（用于参考）
+                            euclidean_to_target = math.sqrt(dx * dx + dy * dy) * resolution
+
+                            candidate_points.append((manhattan_to_room_center, euclidean_to_target, mx, my))
+
+        # 如果有候选点，找到距离房间中心曼哈顿距离最小的点
+        if candidate_points:
+            # 首先按距离房间中心的曼哈顿距离从小到大排序（主要排序条件）
+            # 如果曼哈顿距离相同，再按距离目标点的欧氏距离从小到大排序（次要条件，选择更接近目标的点）
+            candidate_points.sort(key=lambda x: (x[0], x[1]))
+
+            # 选择最佳点
+            best_manhattan, best_euclidean, best_mx, best_my = candidate_points[0]
+
+            # 转换回世界坐标
+            free_x, free_y = self.map_to_world(best_mx, best_my)
+
+            # 计算实际世界距离
+            distance_to_target = math.sqrt((free_x - target_x) ** 2 + (free_y - target_y) ** 2)
+            distance_to_room_center = abs(free_x - room_center_x) + abs(free_y - room_center_y)
+
+            self.get_logger().info(
+                f"Found optimal free point at ({free_x:.3f}, {free_y:.3f}), "
+                f"distance to target: {distance_to_target:.3f}m, "
+                f"Manhattan to room center: {distance_to_room_center:.3f}m, "
+                f"map cells Manhattan: {best_manhattan}"
+            )
+            return free_x, free_y
+
+        # 没有找到空闲点，返回原始目标点
+        self.get_logger().warn(f"No free point found within {search_radius}m radius, using original target")
+        return target_x, target_y
+
     def position_callback(self, msg: Odometry):
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
@@ -352,9 +426,8 @@ class TaskSubscriber(Node):
         else:
             self.get_logger().warn("Truncation face target failed")
 
-    def _room_cb(self, msg: String):
+    def _room_cb(self, room: str):
         """回调函数：接收目标房间，匹配最相似的房间"""
-        room = msg.data
         bbox = self.query_room_callback(room)
         if bbox is None:
             self.get_logger().warn(f"Room '{room}' not matched; will not apply room filter.")
@@ -367,25 +440,24 @@ class TaskSubscriber(Node):
 
         self.get_logger().info(f"Room ready: {room} bbox={bbox}")
 
-    def _target_cb(self, msg: String):
+    def _target_cb(self, target_name: str):
         with self._lock:
-            self.target_name = msg.data
+            self.target_name = target_name
         self.get_logger().info(f"Received target name: {self.target_name}")
 
         # 触发 worker 执行任务（目标为主触发）
         self._task_event.set()
 
-    def _related_obj_cb(self, msg: String):
+    def _related_obj_cb(self, related_name: str):
         with self._lock:
-            self.related_object_name = msg.data
+            self.related_object_name = related_name
         self.get_logger().info(f"Received related object name: {self.related_object_name}")
 
         # 触发 task_worker：如果已有 target_name，则走 related->target 流程
         self._task_event.set()
 
-    def _hazard_cb(self, msg: String):
+    def _hazard_cb(self, hazard: str):
         """存储障碍的边界到yaml中"""
-        hazard = msg.data
         self.get_logger().info(f"Received hazard name: {hazard}")
         corners = self.query_callback(hazard)
 
@@ -469,6 +541,10 @@ class TaskSubscriber(Node):
                 target_pos = np.array(corners).mean(axis=0)
                 target_x, target_y = float(target_pos[0]), float(target_pos[1])
 
+                # FLAG: 查找距离最近的空闲点
+                # TODO: 1.0是 target 距离阈值，根据bbox大小调整
+                free_x, free_y = self.find_optimal_free_point_by_room_center(target_x, target_y, 1.0)
+
                 with self._lock:
                     self.target_x = target_x
                     self.target_y = target_y
@@ -482,16 +558,23 @@ class TaskSubscriber(Node):
                         self.get_logger().warn(f"Related '{related_name}' not found, fallback to direct target.")
 
                         # FLAG: 导航到最近的点
-                        ok = self._goto_and_face_target(target_x, target_y, target_x, target_y)
+                        ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
+                        # ok = self._goto_and_face_target(target_x, target_y, target_x, target_y)
                     else:
                         rpos = np.array(rcorners).mean(axis=0)
                         rx, ry = float(rpos[0]), float(rpos[1])
 
-                    
+                        # FLAG: 导航到最近的相关空闲点
+                        # TODO: 1.2是 related 距离阈值，根据bbox大小调整
+                        free_rx, free_ry = self.find_optimal_free_point_by_room_center(rx, ry, 1.2)
+
                         # DEBUG: 可以在此处硬赋值related 坐标
                         self.get_logger().info(f"[query] related '{related_name}' -> ({rx:.3f}, {ry:.3f})")
+                        self.get_logger().warn(f"goto related point: ({free_rx:.3f}, {free_ry:.3f})")
 
-                        ok = self._goto_point(rx, ry, yaw=0, frame_id="map", wait_timeout=5.0)
+                        # FLAG: 导航到最近的相关空闲点
+                        # DEBUG: 截断面向target，不会对related进行判断，此处还是有风险进入膨胀层
+                        ok = self._goto_point(free_rx, free_ry, yaw=0, frame_id="map", wait_timeout=5.0)
 
                         if ok:
                             # 已经到达相关物体点
@@ -500,16 +583,16 @@ class TaskSubscriber(Node):
                                 ok = self._face_target(target_x, target_y)
                             else:
                                 self.get_logger().warn("Too far away from target, fallback to direct target.")
-                                ok = self._goto_and_face_target(target_x, target_y, target_x, target_y)
+                                ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
 
                         else:
                             # 无法到达相关物体，回退直去目标物体
                             self.get_logger().warn("Goto related failed, fallback to direct target.")
-                            ok = self._goto_and_face_target(target_x, target_y, target_x, target_y)
+                            ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
 
                 else:
                     # 没有相关物体，直接去目标物体
-                    ok = self._goto_and_face_target(target_x, target_y, target_x, target_y)
+                    ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
 
                 # 检查任务完成（非阻塞：在 worker 线程里允许 input）
                 if ok:
@@ -838,9 +921,12 @@ class TaskSubscriber(Node):
                 pos = np.array(corners).mean(axis=0)
                 tx, ty = float(pos[0]), float(pos[1])
 
-                self.get_logger().info(f"Recovery to {tx:.1f}, {ty:.1f}")
+                # 重新导航到目标位置
+                free_recovery_x, free_recovery_y = self.find_optimal_free_point_by_room_center(tx, ty, 1.0)
 
-                ok = self._goto_and_face_target(tx, ty, tx, ty)
+                self.get_logger().info(f"Recovery to {free_recovery_x:.1f}, {free_recovery_y:.1f}")
+
+                ok = self._goto_and_face_target(free_recovery_x, free_recovery_y, tx, ty)
                 if ok:
                     self.get_logger().info("Recovery navigation success.")
                     return
@@ -891,13 +977,234 @@ def pop_hazard2yaml(corners: list):
     print(f"[query] Pumped semantic hazard to yaml: {yaml_path}")
 
 
-def main(cfg_path: str):
+
+def task_extract():
+
+    rclpy.init()
+
+    # MindIE网络服务的位置
+    url = "http://127.0.0.1:1025/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+
+    query_text = input("请输入问题：")
+    prompt = f"""
+    请从以下用户指令中提取三个关键要素：
+
+    用户指令："{query_text}"
+
+    请提取：
+    1. **目标房间** (target_room)：要去的房间类型（如卧室、厨房、客厅等），如果有定语也保留（如孩子的卧室等）
+    2. **相关物体** (related_object)：与目标房间相关的物体（如床、桌子等）
+    3. **寻找物品** (target_object)：需要在目标房间找到的物品
+    4. **避开物品** (avoid_object)：路途中需要避开的东西
+
+    规则：
+    - 如果某项信息不明确或不存在，请返回 "None"
+    - 物品名称应该是具体的（如"被子"而不是"那个被子"），一定会有需要找到的物体！！！
+    - 相关物体的意思是，例如"去卧室拿床上的被子"，相关物体就是“床”，如果没有相关物体，请返回 "None"，相关物体如果存在一定是在命令中提到的
+    - 只返回JSON格式，不要有其他文本
+
+    输出格式：
+    {{
+        "target_room": "房间名称",
+        "related_object": "物品名称",
+        "target_object": "物品名称",
+        "avoid_object": "物品名称"
+    }}
+
+    现在请生成JSON：
+    不要思考。
+    """
+
+    # 正确的消息格式
+    data = {
+        "model": "qwen3",  # config.json中设置的模型名称，按需修改
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+        "max_tokens": 1280,
+        "temperature": 0.7,
+    }
+
+    start_time = time.time()
+
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(data))
+        response.raise_for_status()
+        result = response.json()
+
+        # 提取回答内容
+        if "choices" in result and result["choices"]:
+            content = result["choices"][0]["message"]["content"]
+            # print("模型回答:")
+            # print(content)
+        else:
+            print("完整响应:")
+            print(json.dumps(result, indent=2))
+    except Exception as e:
+        print(f"请求失败：{e}")
+        if hasattr(e, "response") and e.response:
+            print("错误详情:", e.response.text)
+
+    end_time = time.time()
+    print("cost time", end_time-start_time)
+
+    content_dict = {}
+    # 解析JSON
+    try:
+        content_dict = json.loads(content)
+    except json.JSONDecodeError:
+        # 如果失败，尝试从文本中提取 JSON 部分
+        # 查找 {...} 格式的 JSON
+
+        json_match = re.search(r'\{[\s\S]*\}', content)  # 注意：贪婪，可能拿到多段时仍不稳
+        if json_match:
+            json_str = json_match.group()
+            try:
+                content_dict = json.loads(json_str)
+            except Exception:
+                content_dict = {}
+        else:
+            # 如果没有找到 JSON，尝试提取键值对
+            """
+                提取的内容包含： 1、房间 2、相关物体 3、寻找物品 4、避开物品
+            """
+            room_match = re.search(r'"target_room"\s*:\s*"([^"]+)"', content)
+            if room_match:
+                content_dict["target_room"] = room_match.group(1)
+
+            related_match = re.search(r'"related_object"\s*:\s*"([^"]+)"', content)
+            if related_match:
+                content_dict["related_object"] = related_match.group(1)
+
+            target_match = re.search(r'"target_object"\s*:\s*"([^"]+)"', content)
+            if target_match:
+                content_dict["target_object"] = target_match.group(1)
+
+            avoid_match = re.search(r'"avoid_object"\s*:\s*"([^"]+)"', content)
+            if avoid_match:
+                content_dict["avoid_object"] = avoid_match.group(1)
+            else:
+                # 正则判断 None/null
+                if re.search(r'"avoid_object"\s*:\s*(null|"None")', content):
+                    content_dict["avoid_object"] = "None"
+
+    # 现在可以安全访问字典了
+    target_room = content_dict.get("target_room", "None")
+    target_name = content_dict.get("target_object", "None")
+    related_object = content_dict.get("related_object", "None")
+    avoid_hazard = content_dict.get("avoid_object", "None")
+    
+    cfg_path = "/home/cycl/code_workspace/DualMap/config/query_config.yaml"
+
+    worker = TaskSubscriber(cfg_path)
+
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(worker)
+
+
+    if target_room != "None":
+        worker.room = target_room
+        print(f"get target ROOM: {target_room}")
+
+    print("************************************************")
+
+    if avoid_hazard != "None":
+        worker._hazard_cb(avoid_hazard)
+        print(f"poped HAZARD: {avoid_hazard}")
+    print("************************************************")
+
+    if related_object == "None":
+        # 没有相关物体，开启直达目标回调
+        worker.related_object_name = "None"
+        worker.target_name = target_name
+
+        worker._target_cb(target_name)
+        print(f"start TARGET object callback: {target_name}")
+
+        print("************************************************")
+
+    else:
+        # 有相关物体，开启相关物体函数回调
+        worker.related_object_name = related_object
+        worker.target_name = target_name
+
+        worker._related_obj_cb(related_object)
+        print(f"start RELATED object callback: {related_object}")
+
+
+    try:
+        executor.spin()
+    finally:
+        executor.shutdown()
+        worker.destroy_node()
+        rclpy.shutdown()
+        
+
+
+
+def main():
+    # 从配置读取
+    cfg_path = "/home/cycl/code_workspace/DualMap/config/query_config.yaml"
+    
+    # 读取配置文件
+    with open(cfg_path, "r") as f:
+        cfg = yaml.safe_load(f)
+    
+    # 读取指令
+    query_text = input("请输入指令：")
+    
+    # 解析指令
+    target_room = "bedroom"  
+    target_name = "target"   
+    related_object = "bed"   
+    avoid_hazard = "None"    
+    
+    # 初始化ROS和Node
     rclpy.init()
     node = TaskSubscriber(cfg_path)
 
+    # 等待初始化
+    time.sleep(1)
+
+    if avoid_hazard != "None":
+        node._hazard_cb(avoid_hazard)
+        print(f"poped HAZARD: {avoid_hazard}")
+    print("************************************************")
+
+    # 设置目标信息
+    if target_room != "None":
+        node.room = target_room
+        node._room_cb(target_room)
+        print(f"目标房间: {target_room}")
+        
+        # 等待房间准备完成
+        wait_start = time.time()
+        while not node.is_room_ready:
+            if time.time() - wait_start > 5.0:
+                print("等待房间准备超时！")
+                break
+            time.sleep(0.1)
+        print("ROOM READY!")
+
+    print("************************************************")
+    
+    if related_object == "None":
+        node.related_object_name = "None"
+        node.target_name = target_name
+        node._target_cb(target_name)
+    else:
+        node.related_object_name = related_object
+        node.target_name = target_name
+        node._related_obj_cb(related_object)
+    
+    # 启动执行器
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
-
+    
     try:
         executor.spin()
     finally:
@@ -905,10 +1212,6 @@ def main(cfg_path: str):
         node.destroy_node()
         rclpy.shutdown()
 
-
 if __name__ == "__main__":
-    cfg_path = "/home/cycl/code_workspace/DualMap/config/query_config.yaml"
-    time_pre = time.time()
-    main(cfg_path)
-    time_after = time.time()
-    print(f"Total time: {time_after - time_pre:.3f} seconds")
+    main()
+
