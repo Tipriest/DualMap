@@ -17,13 +17,17 @@ import open_clip
 import supervision as sv
 import torch
 import torch_npu
+from torch_npu.contrib import transfer_to_npu
 from omegaconf import DictConfig
 from PIL import Image
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 from sklearn.metrics.pairwise import cosine_similarity
-from ultralytics import SAM, FastSAM
 import sys
+sys.path.insert(0, "/data/torch_npu/MobileSAM")
+from mobile_sam import sam_model_registry, SamPredictor, SamWrapper
+from ultralytics import FastSAM
+
 sys.path.insert(0, "/data")
 from robot_servicer_dev_kit.servicers.ascend_server import YOLOv10 as YOLO
 torch.npu.set_compile_mode(jit_compile=False)
@@ -210,7 +214,13 @@ class Detector:
                 logger.info(
                     f"[Detector][Init] Loading SAM model from\t{cfg.sam.model_path}"
                 )
-                self.sam:SAM = SAM(cfg.sam.model_path)
+                self.mobile_sam_model = sam_model_registry[cfg.sam.model_type](checkpoint=cfg.sam.model_path)
+                # self.sam:SAM = SAM(cfg.sam.model_path)
+                self.mobile_sam_model.to(device=cfg.sam.device)
+                self.mobile_sam_model.eval()
+                self.mobile_sam_predictor = SamPredictor(self.mobile_sam_model)
+
+                self.sam = SamWrapper(self.mobile_sam_predictor, cfg.sam.device)
             except Exception as e:
                 logger.error(f"[Detector][Init] Error loading SAM model: {e}")
                 return
@@ -665,17 +675,18 @@ class Detector:
             # 将当前结果设置为空字典
             self.curr_results = {}
             return
-        # with timing_context("Segmentation", self):
-        #     sam_out = self.sam.predict(color, bboxes=xyxy, verbose=False)
-        #     masks_tensor = sam_out[0].masks.data
-        #     masks_np = masks_tensor.cpu().numpy()
-        #     self.masks_np = masks_np
 
-        with timing_context("Generate Fake Segmentation", self):
-            sam_out = self.generate_fake_masks(color, bboxes=xyxy, verbose=False)
+        with timing_context("Segmentation", self):
+            sam_out = self.sam.predict(color, bboxes=xyxy, verbose=False)
             masks_tensor = sam_out[0].masks.data
             masks_np = masks_tensor.cpu().numpy()
             self.masks_np = masks_np
+
+        # with timing_context("Generate Fake Segmentation", self):
+        #     sam_out = self.generate_fake_masks(color, bboxes=xyxy, verbose=False)
+        #     masks_tensor = sam_out[0].masks.data
+        #     masks_np = masks_tensor.cpu().numpy()
+        #     self.masks_np = masks_np
         curr_detections = sv.Detections(
             xyxy=xyxy,
             confidence=confidence,

@@ -48,7 +48,11 @@ yolo:
 sam:
   _target_: _self_
   # model_path: model/sam_l.pt
+  model_type: "vit_t"
   model_path: model/mobile_sam.pt
+  device: npu
+
+
 
 fastsam:
   _target_: _self_
@@ -66,8 +70,8 @@ clip:
   # pretrained: datacompdr
 
   model_name: ViT-B-32
-  pretrained: openai
-  # pretrained: "/data/torch_npu/open_clip/weights/ViT-B-32.pt"
+  # pretrained: openai
+  pretrained: "/data/torch_npu/open_clip/weights/ViT-B-32.pt"
   clip_length: 512
   # clip_length: 1024
 
