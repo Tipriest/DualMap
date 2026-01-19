@@ -16,3 +16,7 @@ room_edges:
   bedroom: [1.65, 6.45, -4.4, -0.8]
   studyroom: [1.8, 6.6, 0.7, 3.1]
   livingroom: [-5.0, 1.65, -4.4, 3.1]
+
+api_key: sk-02e28def7b114e3bb8de9b2dc377b608
+
+hazard_yaml_path: /home/cycl/code_workspace/DualMap/config/keepout_bboxes.yaml

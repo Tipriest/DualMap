@@ -9,6 +9,11 @@ os.environ["DISPLAY"] = ""
 import sys
 import time
 import math
+import cv2
+from cv_bridge import CvBridge
+from PIL import Image as PILImage
+import base64
+from io import BytesIO
 import yaml
 import threading
 import json
@@ -29,6 +34,7 @@ from rclpy.executors import MultiThreadedExecutor
 from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid, Odometry
+from sensor_msgs.msg import Image
 from action_msgs.msg import GoalStatus
 from rclpy.action.client import ClientGoalHandle
 
@@ -38,7 +44,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from utils.object import BaseObject
-from mobileclip.modules.common.mobileone import reparameterize_model
+# from mobileclip.modules.common.mobileone import reparameterize_model
 
 
 STATUS_NAME = {
@@ -85,6 +91,10 @@ class TaskSubscriber(Node):
             OccupancyGrid, "/map", self.map_callback, 10, callback_group=self._cbg
         )
 
+        self.rgb_sub = self.create_subscription(
+            Image, "/camera/rgb/image_raw", self.rgb_callback, 10, callback_group=self._cbg
+        )
+
         # ====== Nav2 Action Client ======
         self._action_name = "/navigate_to_pose"
         self._client = ActionClient(self, NavigateToPose, self._action_name, callback_group=self._cbg)
@@ -108,6 +118,12 @@ class TaskSubscriber(Node):
         self.room = None
         self.room_bbox = None
         self.is_room_ready = False
+
+        # ===== 检查是否到达，是否找到 ======
+        self.rgb_check_end = False
+        self.bridge = CvBridge()
+        self.latest_image = None
+        self.image_lock = threading.Lock()
 
         # ====== 从配置文件读取房间边界 ======
         if 'room_edges' in self.cfg:
@@ -343,7 +359,7 @@ class TaskSubscriber(Node):
         """计算当前位置到目标点的距离"""
         if self.target_x is None or self.target_y is None:
             return float('inf')
-        
+
         dx = self.current_x - self.target_x
         dy = self.current_y - self.target_y
         return math.sqrt(dx*dx + dy*dy)
@@ -352,15 +368,15 @@ class TaskSubscriber(Node):
         """截断当前导航任务"""
         if not self._truncate_enabled:
             return
-            
+
         with self._lock:
             current_goal_handle = self._current_goal_handle
-        
+
         if current_goal_handle is not None:
             # 取消当前目标
             self.get_logger().info("Cancelling current navigation goal due to truncation...")
             cancel_future = current_goal_handle.cancel_goal_async()
-            
+
             def _on_cancel_complete(future):
                 try:
                     result = future.result()
@@ -370,10 +386,10 @@ class TaskSubscriber(Node):
                         self.get_logger().warn("Failed to cancel navigation goal")
                 except Exception as e:
                     self.get_logger().error(f"Exception while cancelling goal: {e}")
-                
+
                 # 立即执行面向目标操作
                 self._execute_truncated_face_target()
-            
+
             cancel_future.add_done_callback(_on_cancel_complete)
         else:
             # 如果没有活动的目标句柄，直接执行面向目标操作
@@ -382,10 +398,10 @@ class TaskSubscriber(Node):
     def _execute_truncated_face_target(self):
         """执行截断后的面向目标操作"""
         self.get_logger().info("Executing face target after truncation...")
-        
+
         # 停止截断检查
         self._stop_truncate_check()
-        
+
         # 在新的线程中执行面向目标操作，避免阻塞
         face_thread = threading.Thread(
             target=self._truncated_face_target_impl,
@@ -398,29 +414,29 @@ class TaskSubscriber(Node):
         if self.target_x is None or self.target_y is None:
             self.get_logger().warn("Cannot face target: target coordinates not available")
             return
-        
+
         # 等待一小段时间确保导航已停止
         time.sleep(0.5)
-        
+
         # 计算并执行转向
         delta_yaw = self.calculate_yaw_to_target(self.target_x, self.target_y)
         target_yaw = self.current_yaw + delta_yaw
-        
+
         self.get_logger().info(f"Truncation: facing target with delta_yaw={delta_yaw:.3f}")
-        
+
         # 发送转向命令
         ok = self._goto_point(
-            self.current_x, 
-            self.current_y, 
-            yaw=target_yaw, 
-            frame_id="map", 
+            self.current_x,
+            self.current_y,
+            yaw=target_yaw,
+            frame_id="map",
             wait_timeout=3.0,
             is_truncated=True  # 标记这是截断后的操作
         )
-        
+
         if ok:
             self.get_logger().info("Truncation face target completed successfully")
-            
+
             # 触发任务检查
             self._task_event.set()
         else:
@@ -461,8 +477,9 @@ class TaskSubscriber(Node):
         self.get_logger().info(f"Received hazard name: {hazard}")
         corners = self.query_callback(hazard)
 
+        hazard_path = self.cfg["hazard_yaml_path"]
         if corners is not None:
-            pop_hazard2yaml(corners)
+            pop_hazard2yaml(hazard_path, corners)
 
     # ====================== Worker：执行导航流程 ======================
 
@@ -508,7 +525,7 @@ class TaskSubscriber(Node):
                 continue
 
             try:
-                # ===== [ADD-1] 如果要求目标必须在 room 内：先等待 room_ready =====
+                # ===== 如果要求目标必须在 room 内：先等待 room_ready =====
                 if getattr(self, "require_room_filter", True):
                     t0 = time.time()
                     while True:
@@ -532,7 +549,7 @@ class TaskSubscriber(Node):
 
                         time.sleep(0.05)
 
-                #  1. 查询 target 位置（耗时操作放到 worker 线程里）
+                # 查询 target 位置（耗时操作放到 worker 线程里）
                 corners = self.query_callback(target_name)
                 if corners is None:
                     self.get_logger().error(f"Target '{target_name}' not found in map.")
@@ -551,7 +568,7 @@ class TaskSubscriber(Node):
 
                 self.get_logger().info(f"[query] target '{target_name}' -> ({target_x:.3f}, {target_y:.3f})")
 
-                # 2. 如果有 related，先去 related
+                # 如果有 related，先去 related
                 if related_name:
                     rcorners = self.query_callback(related_name)
                     if rcorners is None:
@@ -594,7 +611,7 @@ class TaskSubscriber(Node):
                     # 没有相关物体，直接去目标物体
                     ok = self._goto_and_face_target(free_x, free_y, target_x, target_y)
 
-                # 检查任务完成（非阻塞：在 worker 线程里允许 input）
+                # 检查任务完成
                 if ok:
                     is_complete = self.check_task()
                     if not is_complete:
@@ -605,8 +622,8 @@ class TaskSubscriber(Node):
                 else:
                     # 目标物体没成功到达
                     # TODO: 无论如何到不了地方，但是一定要转向物体
-                    self.get_logger().warn("Navigation failed -> enter recovery")
-                    self.run_recovery(target_name)
+                    self.get_logger().error("Navigation failed -> TURNING TO TARGET")
+                    # self.run_recovery(target_name)
 
                     final_delta_yaw = self.calculate_yaw_to_target(target_x, target_y)
                     if abs(final_delta_yaw) > 0.2:
@@ -615,7 +632,7 @@ class TaskSubscriber(Node):
                         print(final_delta_yaw)
                         print("#####################################")
                         final_ok = self._face_target(target_x, target_y)
-                    
+
                     # TODO: 返回原点的 send
                     if final_ok:
                         self.request_exit("recovery finished after nav failed, with FACING TO target")
@@ -698,7 +715,7 @@ class TaskSubscriber(Node):
 
                 result_holder["accepted"] = True
                 self.get_logger().info("Goal accepted. Waiting result...")
-                
+
                 # 如果不是截断后的操作，保存目标句柄并启动截断检查
                 if not is_truncated:
                     with self._lock:
@@ -770,7 +787,7 @@ class TaskSubscriber(Node):
             self.get_logger().warn("[room-sem] ROOM_DB is empty.")
             return None
 
-        device = "cuda"
+        device = "cpu"
         tokens = self.clip_tokenizer(names).to(device)
         query_tokens = self.clip_tokenizer([room_name]).to(device)
 
@@ -800,7 +817,7 @@ class TaskSubscriber(Node):
 
     def query_callback(self, instance_query: str):
         text_queries = [instance_query]
-        text_queries_tokenized = self.clip_tokenizer(text_queries).to("cuda")
+        text_queries_tokenized = self.clip_tokenizer(text_queries).to("cpu")
         text_query_ft = self.clip_model.encode_text(text_queries_tokenized)
         text_query_ft = text_query_ft / text_query_ft.norm(dim=-1, keepdim=True)
         text_query_ft = text_query_ft.squeeze()
@@ -808,7 +825,7 @@ class TaskSubscriber(Node):
         values = []
         for obj in self.obj_map:
             values.append(torch.from_numpy(obj.clip_ft))
-        map_clip_fts = torch.stack(values, dim=0).to("cuda")
+        map_clip_fts = torch.stack(values, dim=0).to("cpu")
 
         cos_sim = F.cosine_similarity(text_query_ft.unsqueeze(0), map_clip_fts, dim=-1)
         sorted_cos_sim, sorted_idx = torch.sort(cos_sim, dim=0, descending=True)
@@ -872,25 +889,195 @@ class TaskSubscriber(Node):
         self.clip_model, _, _ = open_clip.create_model_and_transforms(
             clip_model_name, pretrained=pretrained
         )
-        device = "cuda"
+        device = "cpu"
         self.clip_model = self.clip_model.to(device)
         self.clip_model.eval()
-        self.clip_model = reparameterize_model(self.clip_model)
+        # self.clip_model = reparameterize_model(self.clip_model)
         self.clip_tokenizer = open_clip.get_tokenizer(clip_model_name)
         self.get_logger().info(f"Using device: {device}, Done initializing CLIP model.")
 
+
     # ====================== 任务检查 & recovery ======================
+
+    def rgb_callback(self, msg: Image):
+        if self.rgb_check_end != True:
+            return
+        else:
+            self.get_logger().info("Checking rgb image!")
+            self.rgb_image = msg
+            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            
+            with self.image_lock:
+                self.latest_image = cv_image.copy()
+                self.get_logger().info("Updated latest image for task checking!")
+
+                # TODO: 此处把rgb check的flag置为False，避免重复更新，看是否需要
+                self.rgb_check_end = False
+
+    def send_image_to_vlm(self, 
+                         cv_image: np.ndarray, 
+                         query: str,
+                         system_prompt: str = None) -> dict:
+        """
+        将图像发送到VLM并获取响应
+        
+        Args:
+            cv_image: OpenCV图像 (BGR格式)
+            query: 查询文本
+            system_prompt: 系统提示词
+        
+        Returns:
+            VLM的响应字典
+        """
+        try:
+
+            rgb_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+            
+            # 转换为PIL Image以便编码
+            pil_image = PILImage.fromarray(rgb_image)
+            
+            buffered = BytesIO()
+            pil_image.save(buffered, format="JPEG", quality=85)
+            img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            
+            # 构建VLM请求
+            if system_prompt is None:
+                system_prompt = "You are a helpful vision-language assistant. Analyze the image and answer questions about it."
+            
+            messages = [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": query},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_base64}"
+                            }
+                        }
+                    ]
+                }
+            ]
+            
+            # 或者使用本地路径方式（如果VLM支持）
+            # messages = [
+            #     {
+            #         "role": "user",
+            #         "content": [
+            #             {"type": "text", "text": query},
+            #             {"type": "image_file", "image_file": save_path}
+            #         ]
+            #     }
+            # ]
+            
+            payload = {
+                "model": "gpt-4-vision-preview",  # 或你的VLM模型名称
+                "messages": messages,
+                "max_tokens": 1000,
+                "temperature": 0.1
+            }
+            
+            # 发送请求
+            self.get_logger().info(f"Sending image ({cv_image.shape}) and query to VLM...")
+            self.get_logger().info(f"Query: {query}")
+            
+            start_time = time.time()
+            base_url = os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+            
+            api_key = self.cfg["api_key"]
+            if not api_key:
+                raise ValueError("请设置 QWEN_API_KEY 环境变量")
+
+            url = f"{base_url}/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            response = requests.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=30  # 超时时间
+            )
+            elapsed_time = time.time() - start_time
+            
+            if response.status_code == 200:
+                result = response.json()
+                self.get_logger().info(f"VLM response received in {elapsed_time:.2f}s")
+                
+                # 提取响应内容
+                if 'choices' in result and len(result['choices']) > 0:
+                    content = result['choices'][0]['message']['content']
+                    self.get_logger().info(f"VLM Response: {content}")
+                    
+                    return {
+                        "success": True,
+                        "response": content,
+                        "raw_response": result,
+                        "processing_time": elapsed_time,
+                        "image_shape": cv_image.shape
+                    }
+                else:
+                    self.get_logger().warn(f"Unexpected VLM response format: {result}")
+                    return {
+                        "success": False,
+                        "error": "Invalid response format",
+                        "raw_response": result
+                    }
+            else:
+                self.get_logger().error(f"VLM request failed: {response.status_code} - {response.text}")
+                return {
+                    "success": False,
+                    "error": f"HTTP {response.status_code}",
+                    "response_text": response.text
+                }
+                
+        except requests.exceptions.Timeout:
+            self.get_logger().error(f"VLM request timeout after 30s")
+            return {
+                "success": False,
+                "error": "Request timeout"
+            }
+        except Exception as e:
+            self.get_logger().error(f"Error sending to VLM: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
 
     def check_task(self) -> bool:
         """
         TODO:
         这里后续会换成 VLM 判定。当前保留交互，但在 worker 线程里执行，不会阻塞 ROS executor。
         """
-        try:
-            complete = input("If task complete, enter '1/0': ").strip()
-            return complete == "1"
-        except Exception:
+
+        print("+++++++++++++++++++ Task Checking +++++++++++++++++++++++")
+
+        while self.latest_image is None:
+            self.get_logger().warn("Waiting for latest image for task checking...")
+            time.sleep(0.5)
+
+        cv_image = self.latest_image.copy()
+        query = f"Target object is {self.target_name}.\
+                  Is the target object clearly visible in the image? \
+                  Answer 'Yes' or 'No'."
+        
+        print("+++++++++++++++++++ Checking +++++++++++++++++++++++")
+        print(query)
+        
+        vlm_res = self.send_image_to_vlm(cv_image, query)
+        if vlm_res["success"]:
+            self.get_logger().info(f"VLM Response: {vlm_res['response_text']}")
+            return vlm_res["response_text"].strip().lower() == "yes"
+        else:
+            self.get_logger().error(f"VLM check failed: {vlm_res['error']}")
             return False
+        
+
 
     def turn_around(self):
         yaw_list = [0.0, math.pi/2, math.pi, -math.pi/2]
@@ -953,8 +1140,8 @@ class TaskSubscriber(Node):
         super().destroy_node()
 
 
-def pop_hazard2yaml(corners: list):
-    yaml_path = "keepout_bboxes.yaml"
+def pop_hazard2yaml(hazard_path: str, corners: list):
+    yaml_path = hazard_path
     left_down, right_down, left_up, right_up = corners
 
     yaml_content = """bboxes:
@@ -977,192 +1164,148 @@ def pop_hazard2yaml(corners: list):
     print(f"[query] Pumped semantic hazard to yaml: {yaml_path}")
 
 
+def parse_command_with_qwen(cfg_path: str, user_query: str):
+    """
+    使用 Qwen 官方 API 解析用户指令，提取导航参数。
 
-def task_extract():
+    Args:
+        cfg_path: 配置文件路径
+        user_query: 用户输入的指令文本
 
-    rclpy.init()
-
-    # MindIE网络服务的位置
-    url = "http://127.0.0.1:1025/v1/chat/completions"
-    headers = {"Content-Type": "application/json"}
-
-    query_text = input("请输入问题：")
-    prompt = f"""
-    请从以下用户指令中提取三个关键要素：
-
-    用户指令："{query_text}"
-
-    请提取：
-    1. **目标房间** (target_room)：要去的房间类型（如卧室、厨房、客厅等），如果有定语也保留（如孩子的卧室等）
-    2. **相关物体** (related_object)：与目标房间相关的物体（如床、桌子等）
-    3. **寻找物品** (target_object)：需要在目标房间找到的物品
-    4. **避开物品** (avoid_object)：路途中需要避开的东西
-
-    规则：
-    - 如果某项信息不明确或不存在，请返回 "None"
-    - 物品名称应该是具体的（如"被子"而不是"那个被子"），一定会有需要找到的物体！！！
-    - 相关物体的意思是，例如"去卧室拿床上的被子"，相关物体就是“床”，如果没有相关物体，请返回 "None"，相关物体如果存在一定是在命令中提到的
-    - 只返回JSON格式，不要有其他文本
-
-    输出格式：
-    {{
-        "target_room": "房间名称",
-        "related_object": "物品名称",
-        "target_object": "物品名称",
-        "avoid_object": "物品名称"
-    }}
-
-    现在请生成JSON：
-    不要思考。
+    Returns:
+        包含 target_room, target_object, related_object, avoid_object 的字典
     """
 
-    # 正确的消息格式
-    data = {
-        "model": "qwen3",  # config.json中设置的模型名称，按需修改
+    # 读取配置文件
+    with open(cfg_path, "r") as f:
+        cfg = yaml.safe_load(f)
+
+    api_key = cfg["api_key"]
+    base_url = os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+
+    if not api_key:
+        raise ValueError("请设置 QWEN_API_KEY 环境变量")
+
+    url = f"{base_url}/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    prompt = f"""
+            请从以下用户指令中提取三个关键要素：
+            用户指令：“{user_query}”
+            请提取：
+            1. **目标房间** (target_room)：要去的房间类型（如卧室、厨房、客厅等），如果有定语也保留（如孩子的卧室等）
+            2. **相关物体** (related_object)：与目标房间相关的物体（如床、桌子等）
+            3. **寻找物品** (target_object)：需要在目标房间找到的物品
+            4. **避开物品** (avoid_object)：路途中需要避开的东西
+            规则：
+            - 如果某项信息不明确或不存在，请返回 "None"
+            - 物品名称应该是具体的（如"被子"而不是"那个被子"），一定会有需要找到的物体！！！
+            - 相关物体的意思是，例如"去卧室拿床上的被子"，相关物体就是“床”，如果没有相关物体，请返回 "None"，相关物体如果存在一定是在命令中提到的
+            - 只返回JSON格式，不要有其他文本
+            输出格式：
+            {{
+                "target_room": "房间名称",
+                "related_object": "物品名称",
+                "target_object": "物品名称",
+                "avoid_object": "物品名称"
+            }}
+            现在请生成JSON：
+            不要思考。
+            """
+
+    payload = {
+        "model": "qwen-max",  # qwen-turbo, qwen-plus 
         "messages": [
             {
                 "role": "user",
-                "content": prompt,
+                "content": prompt
             }
         ],
-        "max_tokens": 1280,
-        "temperature": 0.7,
+        "temperature": 0.1,  
+        "top_p": 0.8,
+        "stream": False,
+        "max_tokens": 1024
     }
 
-    start_time = time.time()
-
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(data))
-        response.raise_for_status()
+        response = requests.post(url,
+                                 headers=headers,
+                                 data=json.dumps(payload),
+                                 timeout=30)
+        response.raise_for_status() 
+
         result = response.json()
 
-        # 提取回答内容
-        if "choices" in result and result["choices"]:
+        if "choices" in result and len(result["choices"]) > 0:
             content = result["choices"][0]["message"]["content"]
-            # print("模型回答:")
-            # print(content)
-        else:
-            print("完整响应:")
-            print(json.dumps(result, indent=2))
-    except Exception as e:
-        print(f"请求失败：{e}")
-        if hasattr(e, "response") and e.response:
-            print("错误详情:", e.response.text)
 
-    end_time = time.time()
-    print("cost time", end_time-start_time)
+            # 清理响应内容，提取JSON部分
+            content = content.strip()
 
-    content_dict = {}
-    # 解析JSON
-    try:
-        content_dict = json.loads(content)
-    except json.JSONDecodeError:
-        # 如果失败，尝试从文本中提取 JSON 部分
-        # 查找 {...} 格式的 JSON
+            # 查找JSON对象
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                json_str = json_match.group()
+                parsed_data = json.loads(json_str)
 
-        json_match = re.search(r'\{[\s\S]*\}', content)  # 注意：贪婪，可能拿到多段时仍不稳
-        if json_match:
-            json_str = json_match.group()
-            try:
-                content_dict = json.loads(json_str)
-            except Exception:
-                content_dict = {}
-        else:
-            # 如果没有找到 JSON，尝试提取键值对
-            """
-                提取的内容包含： 1、房间 2、相关物体 3、寻找物品 4、避开物品
-            """
-            room_match = re.search(r'"target_room"\s*:\s*"([^"]+)"', content)
-            if room_match:
-                content_dict["target_room"] = room_match.group(1)
+                # 确保所有键都存在，缺失的键设为"None"
+                required_keys = ["target_room", "related_object", "target_object", "avoid_object"]
+                for key in required_keys:
+                    if key not in parsed_data:
+                        parsed_data[key] = "None"
 
-            related_match = re.search(r'"related_object"\s*:\s*"([^"]+)"', content)
-            if related_match:
-                content_dict["related_object"] = related_match.group(1)
-
-            target_match = re.search(r'"target_object"\s*:\s*"([^"]+)"', content)
-            if target_match:
-                content_dict["target_object"] = target_match.group(1)
-
-            avoid_match = re.search(r'"avoid_object"\s*:\s*"([^"]+)"', content)
-            if avoid_match:
-                content_dict["avoid_object"] = avoid_match.group(1)
+                return parsed_data
             else:
-                # 正则判断 None/null
-                if re.search(r'"avoid_object"\s*:\s*(null|"None")', content):
-                    content_dict["avoid_object"] = "None"
+                raise ValueError("API响应中未找到有效的JSON格式")
+        else:
+            raise ValueError("API响应格式异常")
 
-    # 现在可以安全访问字典了
-    target_room = content_dict.get("target_room", "None")
-    target_name = content_dict.get("target_object", "None")
-    related_object = content_dict.get("related_object", "None")
-    avoid_hazard = content_dict.get("avoid_object", "None")
-    
-    cfg_path = "/home/cycl/code_workspace/DualMap/config/query_config.yaml"
-
-    worker = TaskSubscriber(cfg_path)
-
-    executor = MultiThreadedExecutor(num_threads=4)
-    executor.add_node(worker)
-
-
-    if target_room != "None":
-        worker.room = target_room
-        print(f"get target ROOM: {target_room}")
-
-    print("************************************************")
-
-    if avoid_hazard != "None":
-        worker._hazard_cb(avoid_hazard)
-        print(f"poped HAZARD: {avoid_hazard}")
-    print("************************************************")
-
-    if related_object == "None":
-        # 没有相关物体，开启直达目标回调
-        worker.related_object_name = "None"
-        worker.target_name = target_name
-
-        worker._target_cb(target_name)
-        print(f"start TARGET object callback: {target_name}")
-
-        print("************************************************")
-
-    else:
-        # 有相关物体，开启相关物体函数回调
-        worker.related_object_name = related_object
-        worker.target_name = target_name
-
-        worker._related_obj_cb(related_object)
-        print(f"start RELATED object callback: {related_object}")
-
-
-    try:
-        executor.spin()
-    finally:
-        executor.shutdown()
-        worker.destroy_node()
-        rclpy.shutdown()
-        
-
+    except requests.exceptions.RequestException as e:
+        print(f"API请求失败: {e}")
+        # 返回默认值或抛出异常，根据你的错误处理策略决定
+        return {
+            "target_room": "None",
+            "related_object": "None",
+            "target_object": "None",
+            "avoid_object": "None"
+        }
+    except json.JSONDecodeError as e:
+        print(f"JSON解析失败: {e}")
+        return {
+            "target_room": "None",
+            "related_object": "None",
+            "target_object": "None",
+            "avoid_object": "None"
+        }
 
 
 def main():
     # 从配置读取
-    cfg_path = "/home/cycl/code_workspace/DualMap/config/query_config.yaml"
-    
-    # 读取配置文件
-    with open(cfg_path, "r") as f:
-        cfg = yaml.safe_load(f)
-    
+    cfg_path = "/data/DualMap/config/query_config.yaml"
+
+
     # 读取指令
     query_text = input("请输入指令：")
-    
+    qwen_result = parse_command_with_qwen(cfg_path, query_text)
+
+
     # 解析指令
-    target_room = "bedroom"  
-    target_name = "target"   
-    related_object = "bed"   
-    avoid_hazard = "None"    
-    
+    # target_room = "bed room"
+    # target_name = "bed"
+    # related_object = "bed"
+    # avoid_hazard = "None"
+
+    target_room = qwen_result["target_room"]
+    target_name = qwen_result["target_object"]
+    related_object = qwen_result["related_object"]
+    avoid_hazard = qwen_result["avoid_object"]
+
+
+
     # 初始化ROS和Node
     rclpy.init()
     node = TaskSubscriber(cfg_path)
@@ -1180,7 +1323,7 @@ def main():
         node.room = target_room
         node._room_cb(target_room)
         print(f"目标房间: {target_room}")
-        
+
         # 等待房间准备完成
         wait_start = time.time()
         while not node.is_room_ready:
@@ -1191,7 +1334,7 @@ def main():
         print("ROOM READY!")
 
     print("************************************************")
-    
+
     if related_object == "None":
         node.related_object_name = "None"
         node.target_name = target_name
@@ -1200,11 +1343,11 @@ def main():
         node.related_object_name = related_object
         node.target_name = target_name
         node._related_obj_cb(related_object)
-    
+
     # 启动执行器
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
-    
+
     try:
         executor.spin()
     finally:
