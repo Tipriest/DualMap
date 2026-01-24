@@ -31,7 +31,7 @@ from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PoseArray
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid, Odometry
 from sensor_msgs.msg import Image
@@ -92,6 +92,12 @@ class TaskSubscriber(Node):
             Image, "/camera/color/image_raw", self.rgb_callback, 10, callback_group=self._cbg
         )
 
+        self.dualmp_sub = self.create_subscription(
+            PoseStamped, "/remap_target_position", self.remap_target_callback, 10, callback_group=self._cbg
+        )
+
+        self.related_bbox_pub = self.create_publisher(PoseStamped, '/related_bbox_junqi_only', 10)
+
         # ====== Nav2 Action Client ======
         self._action_name = "/navigate_to_pose"
         self._client = ActionClient(self, NavigateToPose, self._action_name, callback_group=self._cbg)
@@ -102,6 +108,9 @@ class TaskSubscriber(Node):
         self.obj_map = None
 
         self.load_results()
+
+        # DEBUG: 如果想看物体class和位置等信息，取消下面这句的注释，会先打印出来
+        # self.debug_all_objs()
         self.init_clip()
 
         # 机器人当前位姿（来自 /odom）
@@ -403,7 +412,7 @@ class TaskSubscriber(Node):
                 self.get_logger().info(f"[query] target '{target_name}' -> ({target_x:.3f}, {target_y:.3f})")
 
                 # related 优先导航
-                if related_name:
+                if related_name != "None":
                     rcorners = self.query_callback(related_name)
                     if rcorners is None:
                         self.get_logger().warn(f"Related '{related_name}' not found, fallback to direct target.")
@@ -411,6 +420,9 @@ class TaskSubscriber(Node):
                     else:
                         rpos = np.array(rcorners).mean(axis=0)
                         rx, ry = float(rpos[0]), float(rpos[1])
+                        delta_rx = rcorners[1][0] - rcorners[0][0]
+                        delta_ry = rcorners[2][1] - rcorners[1][1]
+                        
                         # FLAG: 导航到最近的相关空闲点
                         # TODO: 1.2是 related 距离阈值，根据bbox大小调整
                         free_rx, free_ry = self.find_optimal_free_point_by_room_center(rx, ry, 1.2)
@@ -442,7 +454,19 @@ class TaskSubscriber(Node):
                     is_complete = self.check_task()
                     print(is_complete)
                     if not is_complete:
-                        self.run_recovery(target_name)
+                        print("@@@@@@@@@@@@@@@@@ PASS TO DUALMAP REMAP @@@@@@@@@@@@@@@@@")
+                        if related_name != "None":
+                            self.get_logger().info(f"[EXIST RELATED] publish related bbox")
+                            self.publish_related_bbox(rx, ry, delta_rx, delta_ry, self.target_name)
+                        else:
+                            self.get_logger().info(f"[NO RELATED] publish target bbox")
+                            self.publish_related_bbox(0, 0, 0, 0, self.target_name)
+                        self.target_x = None
+                        self.target_y = None
+
+                        print("@@@@@@@@@@@@@@@@@ PASS TO DUALMAP REMAP @@@@@@@@@@@@@@@@@")
+
+                        self.run_recovery()
                         self.request_exit("recovery finished after task incomplete")
                     else:
                         self.request_exit("task complete")
@@ -468,6 +492,29 @@ class TaskSubscriber(Node):
             except Exception as e:
                 self.get_logger().error(f"Worker exception: {repr(e)}")
 
+
+    def publish_related_bbox(self, cx, cy, width, height, label):
+        """临时发布边界框（使用PoseStamped）"""
+        msg = PoseStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        # frame_id 填充 target_name 的 str
+        msg.header.frame_id = self.target_name
+        
+        # 用第一个位姿表示中心
+        from geometry_msgs.msg import Pose
+        center_pose = Pose()
+        center_pose.position.x = cx
+        center_pose.position.y = cy
+        center_pose.position.z = 0.0  
+        
+        # 可以在orientation中存宽高（临时方案）
+        center_pose.orientation.x = width
+        center_pose.orientation.y = height
+        
+        msg.pose = center_pose
+        self.related_bbox_pub.publish(msg)
+        self.get_logger().info(f"发布临时bbox: {label} at ({cx}, {cy})")
+
     def _goto_and_face_target(self, free_x: float, free_y: float, tx: float, ty: float) -> bool:
         # 先去目标点，再原地转向
         ok = self._goto_point(free_x, free_y, yaw=0.0, frame_id="map", wait_timeout=5.0)
@@ -480,6 +527,21 @@ class TaskSubscriber(Node):
         target_yaw = self.current_yaw + delta_yaw
         self.get_logger().info(f"Face target: delta_yaw={delta_yaw:.3f} -> target_yaw={target_yaw:.3f}")
         return self._goto_point(self.current_x, self.current_y, yaw=target_yaw, frame_id="map", wait_timeout=5.0)
+
+
+    def remap_target_callback(self, msg: PoseStamped):
+        """收到目标物体位置后，发布该位置"""
+        remap_status = msg.header.frame_id
+        if remap_status == "success":
+            self.target_x = msg.pose.position.x
+            self.target_y = msg.pose.position.y
+            self.get_logger().info(f"收到目标物体位置: x={self.target_x:.3f}, y={self.target_y:.3f}")
+        
+        else:
+            self.target_x = 0
+            self.target_y = 0
+            self.get_logger().info("Fail to get target, failed, QAQ.")
+
 
     # ====================== Nav2 Action：异步 + Event 等待 ======================
 
@@ -595,6 +657,27 @@ class TaskSubscriber(Node):
         )
         return db[names[best_idx]]
 
+
+    def debug_all_objs(self):
+        for obj in self.obj_map:
+            self.get_logger().info(f"Obj: {obj.class_name}, clip_ft shape: {obj.clip_ft.shape}")
+            obj_min_x = obj.bbox_2d.min_bound[0]
+            obj_min_y = obj.bbox_2d.min_bound[1]
+            obj_max_x = obj.bbox_2d.max_bound[0]
+            obj_max_y = obj.bbox_2d.max_bound[1]
+
+            left_down_map = np.array([obj_min_x, obj_min_y])
+            right_down_map = np.array([obj_max_x, obj_min_y])
+            left_up_map = np.array([obj_max_x, obj_max_y])
+            right_up_map = np.array([obj_min_x, obj_max_y])
+
+            corner_list = [left_down_map, right_down_map, left_up_map, right_up_map]
+
+            obj_pos = np.mean(corner_list, axis=0)
+            self.get_logger().info(f"Obj position: {obj_pos}")
+
+            print("============================")
+
     def query_callback(self, instance_query: str):
         text_queries = [instance_query]
         text_queries_tokenized = self.clip_tokenizer(text_queries).to("cpu")
@@ -666,10 +749,11 @@ class TaskSubscriber(Node):
 
     def init_clip(self):
         self.get_logger().info("Loading CLIP model")
-        clip_model_name = "MobileCLIP-S2"
-        pretrained = "datacompdr"
+        clip_model_name = "ViT-B-32"
+        # TODO: 加进cfg
+        pretrained_path = "/data/torch_npu/open_clip/weights/ViT-B-32.pt"  # 修改为实际路径
         self.clip_model, _, _ = open_clip.create_model_and_transforms(
-            clip_model_name, pretrained=pretrained
+            clip_model_name, pretrained=pretrained_path, device="cpu"
         )
         device = "cpu"
         self.clip_model = self.clip_model.to(device)
@@ -832,7 +916,7 @@ class TaskSubscriber(Node):
 
         query = (
             f"Target object is {self.target_name}. "
-            "Is the target object clearly visible in the image? Answer 'Yes' or 'No'"
+            "Is the target object in the image? Answer 'Yes' or 'No'"
         )
 
         vlm_res = self.send_image_to_vlm(cv_image, query)
@@ -852,39 +936,54 @@ class TaskSubscriber(Node):
                 self.get_logger().warn("Turn around failed, continue...")
             time.sleep(1.0)
 
-    def run_recovery(self, target_name: str):
+    def run_recovery(self):
         # TODO: recovery 策略：转 N 圈 + 直到建图返回ok信号
         # FIXME: 有很大问题
-        self.get_logger().warn("Running recovery...")
+        self.get_logger().warn("Running recovery...TURNING...")
 
         self.turn_around()
 
-        cnt = 0
-        while cnt < 3:
-            # TODO: 重新load remap后的结果，改成监听建图发回的topic信息
-            self.get_logger().warn(f"Recovery try {cnt+1}/3 ...")
+        while True:
+            if self.target_x is not None and self.target_y is not None:
+                break
+            time.sleep(0.5)
+        if abs(self.target_x - 0.0) < 1e-3 and abs(self.target_y - 0.0) < 1e-3:
+            # fail 了，返回原点
+            self.get_logger().warn("Recovery failed, return to origin.")
+            self._goto_point(0.0, 0.0, yaw=0.0, frame_id="map", wait_timeout=5.0)
+            return
 
-            corners = self.query_callback(target_name)
-            if corners is None:
-                self.turn_around()
-                cnt += 1
-                continue
+        
+        self.get_logger().warn(f"Recovery: target_x {self.target_x:.1f} target_y {self.target_y:.1f} from dualmap.")
+        self._goto_and_face_target(self.target_x, self.target_y, self.current_x, self.current_y)
 
-            pos = np.array(corners).mean(axis=0)
-            tx, ty = float(pos[0]), float(pos[1])
 
-            free_rx, free_ry = self.find_optimal_free_point_by_room_center(tx, ty, 1.0)
-            self.get_logger().info(f"Recovery to {free_rx:.1f}, {free_ry:.1f}")
+        # cnt = 0
+        # while cnt < 3:
+        #     # TODO: 重新load remap后的结果，改成监听建图发回的topic信息
+        #     self.get_logger().warn(f"Recovery try {cnt+1}/3 ...")
 
-            ok = self._goto_and_face_target(free_rx, free_ry, tx, ty)
-            if ok:
-                self.get_logger().info("Recovery navigation success.")
-                return
+        #     corners = self.query_callback(target_name)
+        #     if corners is None:
+        #         self.turn_around()
+        #         cnt += 1
+        #         continue
 
-            self.get_logger().warn("Recovery navigation failed, retry...")
-            cnt += 1
+        #     pos = np.array(corners).mean(axis=0)
+        #     tx, ty = float(pos[0]), float(pos[1])
 
-        self.get_logger().error("Recovery failed. (No sys.exit here; keep node alive for next task.)")
+        #     free_rx, free_ry = self.find_optimal_free_point_by_room_center(tx, ty, 1.0)
+        #     self.get_logger().info(f"Recovery to {free_rx:.1f}, {free_ry:.1f}")
+
+        #     ok = self._goto_and_face_target(free_rx, free_ry, tx, ty)
+        #     if ok:
+        #         self.get_logger().info("Recovery navigation success.")
+        #         return
+
+        #     self.get_logger().warn("Recovery navigation failed, retry...")
+        #     cnt += 1
+
+        # self.get_logger().error("Recovery failed. (No sys.exit here; keep node alive for next task.)")
 
     # ====================== 计算面向目标 yaw ======================
 
@@ -960,8 +1059,8 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
 请从以下用户指令中提取三个关键要素：
 用户指令：“{user_query}”
 请提取：
-1. **目标房间** (target_room)：要去的房间类型（如卧室、厨房、客厅等），如果有定语也保留（如孩子的卧室等）
-2. **相关物体** (related_object)：与目标房间相关的物体（如床、桌子等）
+1. **目标房间** (target_room)：要去的房间类型（如卧室、厨房、客厅等）
+2. **相关物体** (related_object)：与目标物体相关的物体，可能是家具的类型（如床、桌子等）
 3. **寻找物品** (target_object)：需要在目标房间找到的物品
 4. **避开物品** (avoid_object)：路途中需要避开的东西
 规则：
@@ -969,6 +1068,8 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
 - 物品名称应该是具体的（如"被子"而不是"那个被子"），一定会有需要找到的物体！！！
 - 相关物体的意思是，例如"去卧室拿床上的被子"，相关物体就是“床”，如果没有相关物体，请返回 "None"，相关物体如果存在一定是在命令中提到的
 - 只返回JSON格式，不要有其他文本
+- 房间只可能是bedroom，studyroom，livingroom，kitchen 中的一个，名称必须原样返回 4者中的一个，如 bedroom！！！
+- 返回的物体名称需要是英文的类型，比如输出的指令是“床”，你应当返回“bed”
 输出格式：
 {{
     "target_room": "房间名称",
@@ -1051,7 +1152,7 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
 
 def main():
     # 从配置读取
-    cfg_path = "/data/DualMap/config/query_config.yaml"
+    cfg_path = "/home/tang123/DualMap/config/query/query_config.yaml"
 
     # 读取指令
     query_text = input("请输入指令：")
