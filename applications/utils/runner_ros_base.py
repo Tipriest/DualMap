@@ -3,9 +3,11 @@
 import logging
 import time
 from collections import deque
+import json
 
 import cv2
 import numpy as np
+import open3d as o3d
 from scipy.spatial.transform import Rotation as R
 
 from utils.time_utils import timing_context
@@ -267,4 +269,46 @@ class RunnerROSBase:
         )
         self.logger.info(
             "[Main Finished This Frame] ========================================"
+        )
+
+    @staticmethod
+    def parse_search_request_json(payload: str) -> dict:
+        """
+        Request JSON format (std_msgs/String):
+          {
+            "name": "mug",
+            "bbox": [min_x, min_y, max_x, max_y]  // world XY (optionally 6 elems with zmin/zmax)
+            "score_th": 0.35,                     // optional
+            "continuous": false                   // optional
+          }
+        """
+        try:
+            data = json.loads(payload)
+        except Exception:
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return data
+
+    def build_o3d_aabb_from_list(self, bbox_list):
+        """
+        bbox_list: [min_x,min_y,max_x,max_y] or [min_x,min_y,min_z,max_x,max_y,max_z]
+        z defaults to cfg.floor_height when not provided.
+        """
+        if bbox_list is None:
+            return None
+        arr = np.asarray(bbox_list, dtype=np.float32).reshape(-1)
+        if arr.size == 4:
+            min_x, min_y, max_x, max_y = arr.tolist()
+            z = float(getattr(self.cfg, "floor_height", 0.0))
+            min_b = np.array([min_x, min_y, z], dtype=np.float32)
+            max_b = np.array([max_x, max_y, z], dtype=np.float32)
+        elif arr.size == 6:
+            min_x, min_y, min_z, max_x, max_y, max_z = arr.tolist()
+            min_b = np.array([min_x, min_y, min_z], dtype=np.float32)
+            max_b = np.array([max_x, max_y, max_z], dtype=np.float32)
+        else:
+            return None
+        return o3d.geometry.AxisAlignedBoundingBox(
+            min_bound=min_b, max_bound=max_b
         )

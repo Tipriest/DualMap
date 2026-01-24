@@ -3,6 +3,7 @@
 import logging
 import threading
 import time
+import json
 
 import numpy as np
 import rospy
@@ -11,6 +12,7 @@ from message_filters import ApproximateTimeSynchronizer, Subscriber
 from nav_msgs.msg import Odometry
 from omegaconf import OmegaConf
 from sensor_msgs.msg import CameraInfo, CompressedImage, Image
+from std_msgs.msg import String
 
 from applications.utils.runner_ros_base import RunnerROSBase
 from dualmap.core import Dualmap
@@ -73,6 +75,39 @@ class RunnerROS1(RunnerROSBase):
             self.camera_info_callback,
         )
 
+        # ---- Search request/result (JSON over std_msgs/String) ----
+        self._search_lock = threading.Lock()
+        self._active_search_req = None
+        self._last_published_uid = None
+
+        self.search_request_topic = getattr(
+            cfg, "search_request_topic", "/dualmap/search_request"
+        )
+        self.search_result_topic = getattr(
+            cfg, "search_result_topic", "/dualmap/search_result"
+        )
+        self.search_rate_hz = float(getattr(cfg, "search_rate_hz", 1.0))
+        self.search_sim_threshold = float(
+            getattr(cfg, "search_sim_threshold", 0.30)
+        )
+
+        self._search_req_sub = rospy.Subscriber(
+            self.search_request_topic,
+            String,
+            self._on_search_request,
+            queue_size=10,
+        )
+        self._search_result_pub = rospy.Publisher(
+            self.search_result_topic, String, queue_size=10
+        )
+
+        self._search_thread_stop = False
+        self._search_thread = threading.Thread(
+            target=self._search_loop_1hz, daemon=True
+        )
+        self._search_thread.start()
+        # -----------------------------------------------------------
+
     def synced_callback(self, rgb_msg, depth_msg, odom_msg):
         """Callback for synchronized RGB, Depth, and Odom messages."""
         timestamp = rgb_msg.header.stamp.to_sec()
@@ -116,6 +151,124 @@ class RunnerROS1(RunnerROSBase):
         if self.intrinsics is None:
             self.intrinsics = np.array(msg.K).reshape(3, 3)
             self.logger.warning("[Main] Camera intrinsics received and stored.")
+
+    def _on_search_request(self, msg: String):
+        data = self.parse_search_request_json(msg.data)
+        name = data.get("name", None)
+        bbox_list = data.get("bbox", None)
+        if not name or bbox_list is None:
+            self.logger.warning(
+                "[ROS][Search] Invalid request JSON (need name + bbox)."
+            )
+            return
+
+        score_th = float(data.get("score_th", self.search_sim_threshold))
+        continuous = bool(data.get("continuous", False))
+        bbox = self.build_o3d_aabb_from_list(bbox_list)
+        if bbox is None:
+            self.logger.warning("[ROS][Search] Invalid bbox format in request.")
+            return
+
+        with self._search_lock:
+            self._active_search_req = {
+                "name": str(name),
+                "bbox": bbox,
+                "score_th": score_th,
+                "continuous": continuous,
+            }
+            self._last_published_uid = None
+
+        self.logger.warning(
+            f"[ROS][Search] Received request: name='{name}', score_th={score_th}, continuous={continuous}"
+        )
+
+    def _publish_search_result(self, payload: dict):
+        out = String()
+        out.data = json.dumps(payload, ensure_ascii=False)
+        self._search_result_pub.publish(out)
+
+    def _search_loop_1hz(self):
+        period = 1.0 / max(self.search_rate_hz, 1e-6)
+        while (
+            (not rospy.is_shutdown())
+            and (not self.shutdown_requested)
+            and (not self._search_thread_stop)
+        ):
+            req = None
+            with self._search_lock:
+                req = (
+                    None
+                    if self._active_search_req is None
+                    else dict(self._active_search_req)
+                )
+
+            if req is None:
+                time.sleep(0.1)
+                continue
+
+            if not self.dualmap.global_map_manager.has_global_map():
+                time.sleep(period)
+                continue
+
+            try:
+                query_ft = self.dualmap.convert_inquiry_to_feat(req["name"])
+            except Exception as e:
+                self.logger.warning(
+                    f"[ROS][Search] Failed to encode query '{req['name']}': {e}"
+                )
+                time.sleep(period)
+                continue
+
+            best_obj, best_score = (
+                self.dualmap.global_map_manager.search_similar_object_in_bbox(
+                    query_feat=query_ft,
+                    query_bbox=req["bbox"],
+                    sim_threshold=req["score_th"],
+                    expand_ratio=float(
+                        getattr(self.cfg, "search_bbox_expand_ratio", 0.10)
+                    ),
+                )
+            )
+
+            if best_obj is None:
+                time.sleep(period)
+                continue
+
+            center = (
+                best_obj.bbox_2d.get_center()
+                if best_obj.bbox_2d is not None
+                else best_obj.pcd_2d.get_center()
+            )
+            uid_str = str(best_obj.uid)
+
+            if (not req["continuous"]) and (
+                self._last_published_uid == uid_str
+            ):
+                time.sleep(period)
+                continue
+
+            self._publish_search_result(
+                {
+                    "name": req["name"],
+                    "uid": uid_str,
+                    "score": float(best_score),
+                    "center": [
+                        float(center[0]),
+                        float(center[1]),
+                        float(center[2]),
+                    ],
+                }
+            )
+            self.logger.warning(
+                f"[ROS][Search] Found '{req['name']}' -> uid={uid_str}, score={best_score:.3f}, center={center}"
+            )
+
+            with self._search_lock:
+                self._last_published_uid = uid_str
+                if not req["continuous"]:
+                    self._active_search_req = None
+
+            time.sleep(period)
 
     def spin(self):
         """Main loop calling run_once() at configured ROS rate."""
