@@ -239,10 +239,6 @@ class RunnerROSBase:
                     self.dualmap.end_process()
                     self.shutdown_requested = True
                     return
-                else:
-                    self.logger.warning(
-                        f"current_time: {current_time}, last_time: {last_time}: "
-                    )
         # 判断一下，如果不是关键帧的话也跳过
         if not self.dualmap.check_keyframe(
             data_input.time_stamp, data_input.pose

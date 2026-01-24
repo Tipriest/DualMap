@@ -6,6 +6,7 @@ import faiss
 import numpy as np
 import open3d as o3d
 import torch
+import torch_npu
 import torch.nn.functional as F
 from omegaconf import DictConfig
 from scipy.sparse.csgraph import connected_components
@@ -204,7 +205,7 @@ class Tracker:
         # from map
         map_bbox_values = []
         for obj in self.ref_map:
-            obj_bbox = np.asarray(obj.bbox.get_box_points())
+            obj_bbox = np.asarray(obj.bbox.get_box_points(), dtype=np.float32)
             obj_bbox = torch.from_numpy(obj_bbox)
             map_bbox_values.append(obj_bbox)
         map_bbox_torch = torch.stack(map_bbox_values, dim=0)
@@ -212,7 +213,7 @@ class Tracker:
         # from curr obs
         curr_bbox_values = []
         for obs in self.curr_frame:
-            obs_bbox = np.asarray(obs.bbox.get_box_points())
+            obs_bbox = np.asarray(obs.bbox.get_box_points(), dtype=np.float32)
             obs_bbox = torch.from_numpy(obs_bbox)
             curr_bbox_values.append(obs_bbox)
         curr_bbox_torch = torch.stack(curr_bbox_values, dim=0)
@@ -524,8 +525,13 @@ class Tracker:
         # Ensure inputs are torch tensors
         if not torch.is_tensor(bbox1):
             bbox1 = torch.tensor(bbox1, dtype=torch.float32)
+        else:
+            bbox1 = bbox1.to(dtype=torch.float32)
+
         if not torch.is_tensor(bbox2):
             bbox2 = torch.tensor(bbox2, dtype=torch.float32)
+        else:
+            bbox2 = bbox2.to(dtype=torch.float32)
 
         # Move to GPU if available
         device = "cuda" if torch.cuda.is_available() else "cpu"
