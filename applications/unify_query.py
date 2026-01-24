@@ -454,6 +454,7 @@ class TaskSubscriber(Node):
                     is_complete = self.check_task()
                     print(is_complete)
                     if not is_complete:
+                        # 任务未完成，尝试重新导航，发给DUALMAP 查东西
                         print("@@@@@@@@@@@@@@@@@ PASS TO DUALMAP REMAP @@@@@@@@@@@@@@@@@")
                         if related_name != "None":
                             self.get_logger().info(f"[EXIST RELATED] publish related bbox")
@@ -472,7 +473,7 @@ class TaskSubscriber(Node):
                         self.request_exit("task complete")
                 else:
                     # 目标物体没成功到达
-                    # TODO: 无论如何到不了地方，但是一定要转向物体
+                    # TODO: 无论如何到不了地方，但是一定要转向物体，没东西转向哪？
                     self.get_logger().error("Navigation failed -> LAST TRY FACE TARGET")
                     final_delta_yaw = self.calculate_yaw_to_target(target_x, target_y)
                     final_ok = True
@@ -1067,6 +1068,7 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
 - 如果某项信息不明确或不存在，请返回 "None"
 - 物品名称应该是具体的（如"被子"而不是"那个被子"），一定会有需要找到的物体！！！
 - 相关物体的意思是，例如"去卧室拿床上的被子"，相关物体就是“床”，如果没有相关物体，请返回 "None"，相关物体如果存在一定是在命令中提到的
+- 有可能不存在相关物体！！比如去书房找瓶子，就没有相关物体，你应当对 related_object 返回"None"!!!
 - 只返回JSON格式，不要有其他文本
 - 房间只可能是bedroom，studyroom，livingroom，kitchen 中的一个，名称必须原样返回 4者中的一个，如 bedroom！！！
 - 返回的物体名称需要是英文的类型，比如输出的指令是“床”，你应当返回“bed”
