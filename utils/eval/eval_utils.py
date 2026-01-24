@@ -5,7 +5,10 @@ import numpy as np
 import open3d as o3d
 import plyfile
 import torch
-import torch_npu
+try:
+    import torch_npu
+except ModuleNotFoundError:
+    pass
 from sklearn.neighbors import BallTree
 
 from utils.eval.scannet200_constants import *

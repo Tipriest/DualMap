@@ -8,7 +8,10 @@ import cv2
 import imageio
 import numpy as np
 import torch
-import torch_npu
+try:
+    import torch_npu
+except ModuleNotFoundError:
+    pass
 import yaml
 from kornia.geometry.linalg import (
     compose_transformations,

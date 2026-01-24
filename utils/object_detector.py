@@ -16,22 +16,24 @@ import open3d as o3d
 import open_clip
 import supervision as sv
 import torch
-import torch_npu
-from torch_npu.contrib import transfer_to_npu
+try:
+    import torch_npu
+    from torch_npu.contrib import transfer_to_npu
+    sys.path.insert(0, "/data/torch_npu/MobileSAM")
+    from mobile_sam import sam_model_registry, SamPredictor, SamWrapper
+    sys.path.insert(0, "/data")
+    from robot_servicer_dev_kit.servicers.ascend_server import YOLOv10 as YOLO
+    torch.npu.set_compile_mode(jit_compile=False)
+except ModuleNotFoundError:
+    from ultralytics import YOLO
+
 from omegaconf import DictConfig
 from PIL import Image
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 from sklearn.metrics.pairwise import cosine_similarity
 import sys
-sys.path.insert(0, "/data/torch_npu/MobileSAM")
-from mobile_sam import sam_model_registry, SamPredictor, SamWrapper
 from ultralytics import FastSAM
-
-sys.path.insert(0, "/data")
-from robot_servicer_dev_kit.servicers.ascend_server import YOLOv10 as YOLO
-torch.npu.set_compile_mode(jit_compile=False)
-
 from utils.pcd_utils import (
     mask_depth_to_points,
     refine_points_with_clustering,
@@ -204,8 +206,10 @@ class Detector:
 
                 # 根据不同权重设置类别/文本编码
                 if yolo_name == "yolov8l-world.pt":
+                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
                     self.yolo.set_classes(self.obj_classes.get_classes_arr())
                 elif yolo_name == "yoloe-v8l-seg.pt":
+                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
                     names = self.obj_classes.get_classes_arr()
                     self.yolo.set_classes(names, self.yolo.get_text_pe(names))
                 elif yolo_name == "last.pt":
@@ -214,6 +218,7 @@ class Detector:
                     self.yolo: YOLO = YOLO.YOLO(cfg.yolo.model_path)
                     self.yolo.init_resource()
                 else:
+                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
                     names = self.obj_classes.get_classes_arr()
                     self.yolo.set_classes(names, self.yolo.get_text_pe(names))
 
@@ -221,21 +226,21 @@ class Detector:
                 logger.error(f"[Detector][Init] Error loading YOLO model: {e}")
                 return
 
-            try:
-                # Segmentation module
-                logger.info(
-                    f"[Detector][Init] Loading SAM model from\t{cfg.sam.model_path}"
-                )
-                self.mobile_sam_model = sam_model_registry[cfg.sam.model_type](checkpoint=cfg.sam.model_path)
-                # self.sam:SAM = SAM(cfg.sam.model_path)
-                self.mobile_sam_model.to(device=cfg.sam.device)
-                self.mobile_sam_model.eval()
-                self.mobile_sam_predictor = SamPredictor(self.mobile_sam_model)
+            # try:
+            #     # Segmentation module
+            #     logger.info(
+            #         f"[Detector][Init] Loading SAM model from\t{cfg.sam.model_path}"
+            #     )
+            #     self.mobile_sam_model = sam_model_registry[cfg.sam.model_type](checkpoint=cfg.sam.model_path)
+            #     # self.sam:SAM = SAM(cfg.sam.model_path)
+            #     self.mobile_sam_model.to(device=cfg.sam.device)
+            #     self.mobile_sam_model.eval()
+            #     self.mobile_sam_predictor = SamPredictor(self.mobile_sam_model)
 
-                self.sam = SamWrapper(self.mobile_sam_predictor, cfg.sam.device)
-            except Exception as e:
-                logger.error(f"[Detector][Init] Error loading SAM model: {e}")
-                return
+            #     self.sam = SamWrapper(self.mobile_sam_predictor, cfg.sam.device)
+            # except Exception as e:
+            #     logger.error(f"[Detector][Init] Error loading SAM model: {e}")
+            #     return
 
             # Open fastsam for open vocabulary detection(为开放词汇检测打开fastsam)
             if cfg.use_fastsam:

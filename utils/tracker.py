@@ -6,7 +6,10 @@ import faiss
 import numpy as np
 import open3d as o3d
 import torch
-import torch_npu
+try:
+    import torch_npu
+except ModuleNotFoundError:
+    pass
 import torch.nn.functional as F
 from omegaconf import DictConfig
 from scipy.sparse.csgraph import connected_components

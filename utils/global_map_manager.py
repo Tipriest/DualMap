@@ -806,7 +806,10 @@ class GlobalMapManager(BaseMapManager):
         """
 
         import torch
-        import torch_npu
+        try:
+            import torch_npu
+        except ModuleNotFoundError:
+            pass
         import torch.nn.functional as F
 
         text_query_ft = self.inquiry

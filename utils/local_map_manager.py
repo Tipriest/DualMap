@@ -1298,7 +1298,10 @@ class LocalMapManager(BaseMapManager):
     def find_best_candidate_with_inquiry(self, candidates):
         """根据查询找到最佳候选对象。"""
         import torch
-        import torch_npu
+        try:
+            import torch_npu
+        except ModuleNotFoundError:
+            pass
         import torch.nn.functional as F
 
         text_query_ft = self.inquiry
