@@ -13,7 +13,7 @@ room_edges:
   livingroom: [-5.0, 1.65, -4.4, 3.1]
   kitchen: [-5.0, 6.6, -4.4, 4]  # IGNORE
 
-room_anchor:
+room_anchors:
   bedroom: [3.5, -1.5]
   studyroom: [3.5, 1.5]
   livingroom: [-3.5, 1.5] 
