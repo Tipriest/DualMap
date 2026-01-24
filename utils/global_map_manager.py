@@ -949,7 +949,7 @@ class GlobalMapManager(BaseMapManager):
         expand_ratio: float = 0.0,
     ) -> List[GlobalObject]:
         """
-        Filter global objects whose bbox_2d intersects the query_bbox in XY plane.
+        Filter global objects whose bbox_2d CENTER is inside the query_bbox in XY plane.
         expand_ratio expands query bbox in XY.
         """
         if query_bbox is None:
@@ -966,17 +966,13 @@ class GlobalMapManager(BaseMapManager):
         for obj in self.global_map:
             if obj.bbox_2d is None:
                 continue
-            omin = np.array(obj.bbox_2d.get_min_bound(), dtype=np.float32)
-            omax = np.array(obj.bbox_2d.get_max_bound(), dtype=np.float32)
 
-            # AABB intersection in XY
-            if (
-                omin[0] <= qmax[0]
-                and omax[0] >= qmin[0]
-                and omin[1] <= qmax[1]
-                and omax[1] >= qmin[1]
-            ):
+            c = np.array(obj.bbox_2d.get_center(), dtype=np.float32)
+
+            # keep if center within bbox (XY)
+            if (qmin[0] <= c[0] <= qmax[0]) and (qmin[1] <= c[1] <= qmax[1]):
                 out.append(obj)
+
         return out
 
     def search_similar_object_in_bbox(

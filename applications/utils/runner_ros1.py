@@ -80,6 +80,13 @@ class RunnerROS1(RunnerROSBase):
         self._active_search_req = None
         self._last_published_uid = None
 
+        # debug/throttle state for search loop
+        self._search_debug_last_log_t = 0.0
+        self._search_debug_last_state = None
+        self._search_debug_log_period = float(
+            getattr(cfg, "search_debug_log_period", 5.0)
+        )
+
         self.search_request_topic = getattr(
             cfg, "search_request_topic", "/dualmap/search_request"
         )
@@ -206,31 +213,75 @@ class RunnerROS1(RunnerROSBase):
                 time.sleep(0.1)
                 continue
 
+            now = time.time()
+
             if not self.dualmap.global_map_manager.has_global_map():
+                if (
+                    now - self._search_debug_last_log_t
+                ) >= self._search_debug_log_period:
+                    self._search_debug_last_log_t = now
+                    self.logger.warning(
+                        "[ROS][Search] Waiting: global map not ready yet."
+                    )
                 time.sleep(period)
                 continue
 
             try:
                 query_ft = self.dualmap.convert_inquiry_to_feat(req["name"])
             except Exception as e:
-                self.logger.warning(
-                    f"[ROS][Search] Failed to encode query '{req['name']}': {e}"
-                )
+                if (
+                    now - self._search_debug_last_log_t
+                ) >= self._search_debug_log_period:
+                    self._search_debug_last_log_t = now
+                    self.logger.warning(
+                        f"[ROS][Search] Failed to encode query '{req['name']}': {e}"
+                    )
                 time.sleep(period)
                 continue
+
+            expand_ratio = float(
+                getattr(self.cfg, "search_bbox_expand_ratio", 0.10)
+            )
+            try:
+                cand_num = len(
+                    self.dualmap.global_map_manager.filter_global_objects_in_bbox(
+                        query_bbox=req["bbox"], expand_ratio=expand_ratio
+                    )
+                )
+            except Exception:
+                cand_num = -1
 
             best_obj, best_score = (
                 self.dualmap.global_map_manager.search_similar_object_in_bbox(
                     query_feat=query_ft,
                     query_bbox=req["bbox"],
                     sim_threshold=req["score_th"],
-                    expand_ratio=float(
-                        getattr(self.cfg, "search_bbox_expand_ratio", 0.10)
-                    ),
+                    expand_ratio=expand_ratio,
                 )
             )
 
             if best_obj is None:
+                state = (
+                    "MISS",
+                    req["name"],
+                    float(req["score_th"]),
+                    float(best_score),
+                    int(cand_num),
+                )
+                if (
+                    self._search_debug_last_state != state
+                    or (now - self._search_debug_last_log_t)
+                    >= self._search_debug_log_period
+                ):
+                    self._search_debug_last_state = state
+                    self._search_debug_last_log_t = now
+                    self.logger.warning(
+                        "[ROS][Search] No match yet: name='%s', candidates_in_bbox=%s, best_score=%.3f, score_th=%.3f",
+                        req["name"],
+                        "unknown" if cand_num < 0 else cand_num,
+                        float(best_score),
+                        float(req["score_th"]),
+                    )
                 time.sleep(period)
                 continue
 
@@ -240,6 +291,7 @@ class RunnerROS1(RunnerROSBase):
                 else best_obj.pcd_2d.get_center()
             )
             uid_str = str(best_obj.uid)
+            matched_class = getattr(best_obj, "class_name", None)
 
             if (not req["continuous"]) and (
                 self._last_published_uid == uid_str
@@ -259,8 +311,16 @@ class RunnerROS1(RunnerROSBase):
                     ],
                 }
             )
+
             self.logger.warning(
-                f"[ROS][Search] Found '{req['name']}' -> uid={uid_str}, score={best_score:.3f}, center={center}"
+                "[ROS][Search] MATCH: query='%s' -> class='%s', uid=%s, score=%.3f (th=%.3f), center=%s, candidates_in_bbox=%s",
+                req["name"],
+                str(matched_class) if matched_class is not None else "unknown",
+                uid_str,
+                float(best_score),
+                float(req["score_th"]),
+                np.array(center).tolist(),
+                "unknown" if cand_num < 0 else cand_num,
             )
 
             with self._search_lock:

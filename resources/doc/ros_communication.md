@@ -119,7 +119,7 @@ Reference:
 
 This topic encodes 16-bit depth values correctly.
 
-### Example code 
+### Example code
 
 Here we present an example code for decompressing.
 
@@ -224,4 +224,65 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+```
+
+## DualMap Object Search Topics (JSON over std_msgs/String)
+
+DualMap 侧会监听一个“搜索请求”topic，并在找到目标后发布“搜索结果”topic。为避免引入自定义 msg，这里统一用 `std_msgs/String` 承载 JSON。
+
+### Topics
+- Request: `/dualmap/search_request`
+- Result:  `/dualmap/search_result`
+
+### Request JSON format
+```json
+{
+  "name": "mug",
+  "bbox": [min_x, min_y, max_x, max_y],
+  "score_th": 0.35,
+  "continuous": false
+}
+```
+
+Notes:
+- `bbox` 坐标为 world XY（与 global_obj.bbox_2d 同一坐标系）。也支持 6 元素 `[min_x,min_y,min_z,max_x,max_y,max_z]`。
+- `score_th` 不填则使用程序默认阈值（由 cfg.search_sim_threshold 控制）。
+- `continuous=true` 时会持续以 1Hz 更新发布找到的对象位置；否则找到一次就结束本次搜索。
+
+### Result JSON format
+```json
+{
+  "name": "mug",
+  "uid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "score": 0.42,
+  "center": [x, y, z]
+}
+```
+
+### Quick Test Script
+脚本路径：
+`/home/tipriest/Documents/DualMap/applications/utils/ros_search_test.py`
+
+ROS2 直接测试（不经过 bridge）：
+```bash
+source /opt/ros/humble/setup.zsh
+python3 /home/tipriest/Documents/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name mug --bbox "2.1,-2.5,3.0,-1.0" --score-th 0.35 --timeout 30
+```
+
+ROS1->ROS2（通过 ros1_bridge）测试：
+```bash
+# Terminal 1: ROS master (ROS1)
+source /opt/ros/noetic/setup.zsh
+roscore
+
+# Terminal 2: ros1_bridge (see earlier sections)
+source /opt/ros/noetic/setup.zsh
+source /opt/ros/humble/setup.zsh
+ros2 run ros1_bridge dynamic_bridge
+
+# Terminal 3: publish request from ROS1 side
+source /opt/ros/noetic/setup.zsh
+python3 /home/tipriest/Documents/DualMap/applications/utils/ros_search_test.py \
+  --ros 1 --name mug --bbox "0.0,0.0,2.0,2.0" --score-th 0.35 --timeout 30
 ```

@@ -1068,7 +1068,7 @@ class Detector:
 
         # print("finish use clip")
         time_after_clip_process = time.time()
-        print(f"clip use time: {time_after_clip_process - time_before_clip_process:.3f}")
+        # print(f"clip use time: {time_after_clip_process - time_before_clip_process:.3f}")
 
         results = {
             # SAM Info

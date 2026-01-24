@@ -95,6 +95,13 @@ class RunnerROS2(Node, RunnerROSBase):
         self._active_search_req = None
         self._last_published_uid = None
 
+        # debug/throttle state for search loop
+        self._search_debug_last_log_t = 0.0
+        self._search_debug_last_state = None
+        self._search_debug_log_period = float(
+            getattr(cfg, "search_debug_log_period", 5.0)
+        )
+
         self.search_request_topic = getattr(
             cfg, "search_request_topic", "/dualmap/search_request"
         )
@@ -126,9 +133,9 @@ class RunnerROS2(Node, RunnerROSBase):
     def synced_callback(self, rgb_msg, depth_msg, odom_msg):
         """Callback for synced RGB-D-Odom input."""
         self.received_synced_num += 1
-        self.logger.warning(
-            f"[ROS][Sync][Msg Nums]: {self.received_synced_num}",
-        )
+        # self.logger.warning(
+        #     f"[ROS][Sync][Msg Nums]: {self.received_synced_num}",
+        # )
         timestamp = (
             rgb_msg.header.stamp.sec + rgb_msg.header.stamp.nanosec * 1e-9
         )
@@ -172,9 +179,9 @@ class RunnerROS2(Node, RunnerROSBase):
         pose_matrix = self.build_pose_matrix(translation, quaternion)
         self.push_data(rgb_img, depth_img, pose_matrix, timestamp)
         self.last_message_time = self.get_clock().now().nanoseconds / 1e9
-        self.logger.warning(
-            f"update last_message_time: {self.last_message_time}",
-        )
+        # self.logger.warning(
+        #     f"update last_message_time: {self.last_message_time}",
+        # )
 
     def camera_info_callback(self, msg):
         """Populate intrinsics from CameraInfo topic if not already loaded."""
@@ -241,33 +248,79 @@ class RunnerROS2(Node, RunnerROSBase):
                 time.sleep(0.1)
                 continue
 
+            now = time.time()
+
             # need global map ready
             if not self.dualmap.global_map_manager.has_global_map():
+                # throttle
+                if (
+                    now - self._search_debug_last_log_t
+                ) >= self._search_debug_log_period:
+                    self._search_debug_last_log_t = now
+                    self.logger.warning(
+                        "[ROS][Search] Waiting: global map not ready yet."
+                    )
                 time.sleep(period)
                 continue
 
             try:
                 query_ft = self.dualmap.convert_inquiry_to_feat(req["name"])
             except Exception as e:
-                self.logger.warning(
-                    f"[ROS][Search] Failed to encode query '{req['name']}': {e}"
-                )
+                if (
+                    now - self._search_debug_last_log_t
+                ) >= self._search_debug_log_period:
+                    self._search_debug_last_log_t = now
+                    self.logger.warning(
+                        f"[ROS][Search] Failed to encode query '{req['name']}': {e}"
+                    )
                 time.sleep(period)
                 continue
+
+            expand_ratio = float(
+                getattr(self.cfg, "search_bbox_expand_ratio", 0.10)
+            )
+            # count candidates inside bbox (XY)
+            try:
+                cand_num = len(
+                    self.dualmap.global_map_manager.filter_global_objects_in_bbox(
+                        query_bbox=req["bbox"], expand_ratio=expand_ratio
+                    )
+                )
+            except Exception:
+                cand_num = -1  # unknown
 
             best_obj, best_score = (
                 self.dualmap.global_map_manager.search_similar_object_in_bbox(
                     query_feat=query_ft,
                     query_bbox=req["bbox"],
                     sim_threshold=req["score_th"],
-                    expand_ratio=float(
-                        getattr(self.cfg, "search_bbox_expand_ratio", 0.10)
-                    ),
+                    expand_ratio=expand_ratio,
                 )
             )
 
             if best_obj is None:
-                # not found yet, keep waiting
+                # not found yet: log best_score / threshold / candidates (throttled)
+                state = (
+                    "MISS",
+                    req["name"],
+                    float(req["score_th"]),
+                    float(best_score),
+                    int(cand_num),
+                )
+                if (
+                    self._search_debug_last_state != state
+                    or (now - self._search_debug_last_log_t)
+                    >= self._search_debug_log_period
+                ):
+                    self._search_debug_last_state = state
+                    self._search_debug_last_log_t = now
+                    self.logger.warning(
+                        "[ROS][Search] No match yet: name='%s', candidates_in_bbox=%s, best_score=%.3f, score_th=%.3f",
+                        req["name"],
+                        "unknown" if cand_num < 0 else cand_num,
+                        float(best_score),
+                        float(req["score_th"]),
+                    )
                 time.sleep(period)
                 continue
 
@@ -277,6 +330,7 @@ class RunnerROS2(Node, RunnerROSBase):
                 else best_obj.pcd_2d.get_center()
             )
             uid_str = str(best_obj.uid)
+            matched_class = getattr(best_obj, "class_name", None)
 
             # avoid spamming if not continuous
             if (not req["continuous"]) and (
@@ -297,8 +351,16 @@ class RunnerROS2(Node, RunnerROSBase):
                     ],
                 }
             )
+
             self.logger.warning(
-                f"[ROS][Search] Found '{req['name']}' -> uid={uid_str}, score={best_score:.3f}, center={center}"
+                "[ROS][Search] MATCH: query='%s' -> class='%s', uid=%s, score=%.3f (th=%.3f), center=%s, candidates_in_bbox=%s",
+                req["name"],
+                str(matched_class) if matched_class is not None else "unknown",
+                uid_str,
+                float(best_score),
+                float(req["score_th"]),
+                np.array(center).tolist(),
+                "unknown" if cand_num < 0 else cand_num,
             )
 
             with self._search_lock:
