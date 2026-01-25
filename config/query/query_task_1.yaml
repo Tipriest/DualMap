@@ -1,5 +1,6 @@
 # 只面向 query_task_1.py 使用
 # 填充房间边界和锚点信息
+# NOTE: 请测试 python applications/test_llm_api.py 看大模型是否可以正常调用
 
 defaults:
   - system_config

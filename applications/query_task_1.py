@@ -1,6 +1,6 @@
 """
-dualmap 主机端执行：订阅目标/相关物体/房间等，基于离线 local map 查询位置；
-并通过 Nav2 NavigateToPose 导航到目标点，并支持面向目标的旋转与recovery流程。
+完成task 01：进入指定区域，不调用建图，只从config文件中读取房间区域内预设的目标点
+#TODO: 要不要返回原点
 """
 
 import os
@@ -32,6 +32,23 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))        # applications/
 PROJECT_ROOT = os.path.dirname(PROJECT_ROOT)                    # DualMap/
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+
+import datetime
+
+LOG_FILE = "nav_result.txt"
+
+
+def write_log(message):
+    """
+    记录带有时间戳的日志到文件
+    """
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    log_entry = f"[{timestamp}] {message}\n"
+    # 输出到控制台方便调试，也可注释掉
+    print(log_entry.strip())
+    with open(LOG_FILE, "a") as f:
+        f.write(log_entry)
+
 
 STATUS_NAME = {
     GoalStatus.STATUS_UNKNOWN: "UNKNOWN",
@@ -90,33 +107,9 @@ class TaskSubscriber(Node):
         ok = self._goto_point(region_anchor[0], region_anchor[1], yaw=0.0, frame_id="map", wait_timeout=5.0)
 
         print("Goal result: ", ok)
-        ok = True  # 测试用，强制成功
 
         if ok:
-            # 创建日志目录（如果不存在）
-            log_dir = os.path.join(PROJECT_ROOT, "results")
-            os.makedirs(log_dir, exist_ok=True)
-            
-            # 生成时间戳
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            date_str = time.strftime("%Y-%m-%d %H:%M:%S")
-            
-            # 日志文件名
-            log_filename = f"nav_success_{region}_{timestamp}.log"
-            log_path = os.path.join(log_dir, log_filename)
-            
-            # 写入日志内容
-            try:
-                with open(log_path, 'w', encoding='utf-8') as f:
-                    f.write(f"Timestamp: {date_str}\n")
-                    f.write("-" * 40 + "\n")
-                    f.write("Status: Goal Reached\n")
-                    f.write("Navigation completed successfully.\n")
-                
-                print(f"成功日志已保存到: {log_path}")
-                
-            except Exception as e:
-                print(f"保存日志文件失败: {e}")
+            write_log(f"Enter region! {region}")
 
 
     # ====================== Nav2 Action：异步 + Event 等待 ======================
@@ -288,6 +281,7 @@ def main():
 
     # 读取指令
     query_text = input("请输入指令：")
+    write_log(f"Start: Command received - '{query_text}'")
     region_result = parse_command_with_qwen(cfg_path, query_text)
 
     print("***********************************************")
