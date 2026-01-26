@@ -182,7 +182,7 @@ class TaskSubscriber(Node):
         self.require_room_filter = True   # 强制要求目标必须在房间bbox内
         self.room_wait_timeout = 3.0      # 等 room topic 的最大时间（秒）
         # 到达目标点距离，ok就转向它
-        self._arrived_dist = 1.0 
+        self._arrived_dist = 1.0
 
         # 主线程，开始检索，分配状态机
         self._worker = threading.Thread(target=self._task_worker, daemon=True)
@@ -461,7 +461,7 @@ class TaskSubscriber(Node):
                         rx, ry = float(rpos[0]), float(rpos[1])
                         delta_rx = rcorners[1][0] - rcorners[0][0]
                         delta_ry = rcorners[2][1] - rcorners[1][1]
-                        
+
                         # FLAG: 导航到最近的相关空闲点
                         # NOTE: 1.2是 related 距离阈值，根据bbox大小调整
                         free_rx, free_ry = self.find_optimal_free_point_by_room_center(rx, ry, 1.2)
@@ -544,18 +544,18 @@ class TaskSubscriber(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         # frame_id 填充 target_name 的 str
         msg.header.frame_id = self.target_name
-        
+
         # 用第一个位姿表示中心
         from geometry_msgs.msg import Pose
         center_pose = Pose()
         center_pose.position.x = cx
         center_pose.position.y = cy
-        center_pose.position.z = 0.0  
-        
+        center_pose.position.z = 0.0
+
         # orientation xy 存储 width 和 height
         center_pose.orientation.x = width
         center_pose.orientation.y = height
-        
+
         msg.pose = center_pose
         self.related_bbox_pub.publish(msg)
         self.get_logger().info(f"发布临时bbox: {label} at ({cx}, {cy})")
@@ -582,7 +582,7 @@ class TaskSubscriber(Node):
             self.target_x = msg.pose.position.x
             self.target_y = msg.pose.position.y
             self.get_logger().info(f"收到目标物体位置: x={self.target_x:.3f}, y={self.target_y:.3f}")
-        
+
         else:
             self.target_x = 0
             self.target_y = 0
@@ -827,12 +827,12 @@ class TaskSubscriber(Node):
     def send_image_to_vlm(self, cv_image: np.ndarray, query: str, system_prompt: str = None) -> dict:
         """
         将图像发送到VLM并获取响应
-        
+
         Args:
             cv_image: OpenCV图像 (BGR格式)
             query: 查询文本
             system_prompt: 系统提示词
-        
+
         Returns:
             VLM的响应字典
         """
@@ -906,7 +906,7 @@ class TaskSubscriber(Node):
             return {"success": False, "error": "Request timeout"}
         except Exception as e:
             return {"success": False, "error": str(e)}
-            
+
     def _sanitize_filename(self, s: str) -> str:
         # 避免中文/空格/特殊字符导致的问题
         s = str(s) if s is not None else "None"
@@ -995,7 +995,7 @@ class TaskSubscriber(Node):
                         self.turn_around_imgs[yaw] = cv_image
 
                 self.rgb_check_end = False
-                        
+
             if not ok:
                 self.get_logger().warn("Turn around failed, continue...")
             time.sleep(1.0)
@@ -1058,18 +1058,18 @@ class TaskSubscriber(Node):
         if self.turn_around_imgs:
 
             self.get_logger().info(f"Analyzing {len(self.turn_around_imgs)} images from different angles...")
-            
+
             # 分析每个角度的图像
             for yaw, img in self.turn_around_imgs.items():
                 if self.target_name is not None:
                     # 使用 VLM 分析图像中是否有目标物体
                     query = f"Is the {self.target_name} clearly visible in this image? Answer 'Yes' or 'No'."
                     result = self.send_image_to_vlm(img, query)
-                    
+
                     if result.get("success", False):
                         response = str(result.get("response", "")).strip().lower()
                         self.get_logger().info(f"Angle {math.degrees(yaw):.0f}° VLM response: {response}")
-                        
+
                         # 解析 VLM 响应
                         if "yes" in response or "yes." in response:
                             # 尝试从响应中提取置信度
@@ -1081,7 +1081,7 @@ class TaskSubscriber(Node):
                     self.get_logger().info(f"Target name is None, skip VLM analysis.")
                     return
 
-                    
+
 
     def calculate_yaw_to_target(self, target_x, target_y) -> float:
         dx = target_x - self.current_x
@@ -1177,7 +1177,7 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
 
     # 构建请求体
     payload = {
-        "model": "qwen-max",  # MODEL qwen-turbo, qwen-plus 
+        "model": "qwen-max",  # MODEL qwen-turbo, qwen-plus
         "messages": [
             {
                 "role": "user",
