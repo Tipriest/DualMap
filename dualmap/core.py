@@ -934,7 +934,7 @@ class Dualmap:
     def convert_inquiry_to_feat(self, inquiry_sentence: str):
         text_query_tokenized = self.detector.clip_tokenizer(
             inquiry_sentence
-        ).to("cuda")
+        ).to(self.detector.cfg.device)
         text_query_ft = self.detector.clip_model.encode_text(
             text_query_tokenized
         )
