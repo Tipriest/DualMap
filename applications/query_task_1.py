@@ -4,6 +4,7 @@
 """
 
 import os
+
 os.environ["DISPLAY"] = ""
 
 import sys
@@ -28,8 +29,8 @@ from nav2_msgs.action import NavigateToPose
 
 from action_msgs.msg import GoalStatus
 
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))        # applications/
-PROJECT_ROOT = os.path.dirname(PROJECT_ROOT)                    # DualMap/
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))  # applications/
+PROJECT_ROOT = os.path.dirname(PROJECT_ROOT)  # DualMap/
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
@@ -70,8 +71,7 @@ def yaw_to_quaternion(yaw: float):
 def quat_to_yaw(qx, qy, qz, qw) -> float:
     # yaw (Z) from quaternion
     return math.atan2(
-        2.0 * (qw * qz + qx * qy),
-        qw * qw + qx * qx - qy * qy - qz * qz
+        2.0 * (qw * qz + qx * qy), qw * qw + qx * qx - qy * qy - qz * qz
     )
 
 
@@ -87,34 +87,46 @@ class TaskSubscriber(Node):
 
         # ====== Nav2 Action Client ======
         self._action_name = "/navigate_to_pose"
-        self._client = ActionClient(self, NavigateToPose, self._action_name, callback_group=self._cbg)
+        self._client = ActionClient(
+            self, NavigateToPose, self._action_name, callback_group=self._cbg
+        )
 
         # ====== 从配置文件读取房间边界 ======
         self.room_anchors = {}
         if "room_anchors" in self.cfg:
             self.room_anchors = self.cfg["room_anchors"]
-            self.get_logger().info(f"Loaded room anchors from config: {list(self.room_anchors.keys())}")
+            self.get_logger().info(
+                f"Loaded room anchors from config: {list(self.room_anchors.keys())}"
+            )
 
-        self.get_logger().info("TaskSubscriber initialized. Waiting for topics...")
-
+        self.get_logger().info(
+            "TaskSubscriber initialized. Waiting for topics..."
+        )
 
     def _region_cb(self, region: str):
         """回调函数：接收目标区域，匹配与指令最相似的区域"""
         region_anchor = self.room_anchors.get(region, None)
-        
+
         print("Sending goal to ", region_anchor)
 
-        ok = self._goto_point(region_anchor[0], region_anchor[1], yaw=0.0, frame_id="map", wait_timeout=5.0)
+        ok = self._goto_point(
+            region_anchor[0],
+            region_anchor[1],
+            yaw=0.0,
+            frame_id="map",
+            wait_timeout=5.0,
+        )
 
         print("Goal result: ", ok)
 
         if ok:
             write_log(f"Enter region! {region}")
 
-
     # ====================== Nav2 Action：异步 + Event 等待 ======================
 
-    def _goto_point(self, x: float, y: float, yaw: float, frame_id: str, wait_timeout: float) -> bool:
+    def _goto_point(
+        self, x: float, y: float, yaw: float, frame_id: str, wait_timeout: float
+    ) -> bool:
         """
         发送 NavigateToPose 并等待 result（在 worker 线程里 wait，不阻塞 ROS 回调线程）。
         FLAG: 不再做任何提前截断/cancel逻辑，完全交给 Nav2 自己的容忍度。
@@ -137,7 +149,9 @@ class TaskSubscriber(Node):
         goal_msg.pose.pose.orientation.z = qz
         goal_msg.pose.pose.orientation.w = qw
 
-        self.get_logger().info(f"Send goal: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f} ({frame_id})")
+        self.get_logger().info(
+            f"Send goal: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f} ({frame_id})"
+        )
 
         done_evt = threading.Event()
         result_holder = {"status": None, "accepted": None}
@@ -158,7 +172,9 @@ class TaskSubscriber(Node):
                 def _on_result(rf):
                     try:
                         res = rf.result()
-                        result_holder["status"] = None if res is None else int(res.status)
+                        result_holder["status"] = (
+                            None if res is None else int(res.status)
+                        )
                     finally:
                         done_evt.set()
 
@@ -187,12 +203,13 @@ class TaskSubscriber(Node):
             self.get_logger().info("Navigation SUCCEEDED.")
             return True
 
-        self.get_logger().warn(f"Navigation finished with status={status} ({STATUS_NAME.get(status, '???')})")
+        self.get_logger().warn(
+            f"Navigation finished with status={status} ({STATUS_NAME.get(status, '???')})"
+        )
         return False
 
 
-
-def parse_command_with_qwen(cfg_path:str, user_query: str):
+def parse_command_with_qwen(cfg_path: str, user_query: str):
     """
     使用 Qwen 官方 API 解析用户指令，提取导航参数。
 
@@ -206,7 +223,9 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
     with open(cfg_path, "r") as f:
         cfg = yaml.safe_load(f)
     api_key = cfg["api_key"]
-    base_url = os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+    base_url = os.getenv(
+        "QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    )
 
     if not api_key:
         raise ValueError("请设置 QWEN_API_KEY 环境变量")
@@ -215,7 +234,7 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
     url = f"{base_url}/chat/completions"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
+        "Authorization": f"Bearer {api_key}",
     }
 
     #  prompt 确保解析格式一致
@@ -223,7 +242,7 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
             1. 主卧床头桌区域 -> 返回 "bedroom"
             2. 儿童看护区域 -> 返回 "childroom"
             3. 煤气看护区域 -> 返回 "kitchen"
-            
+
             要求：
             1. 只返回上述三个字符串之一，不要添加任何其他文本
             2. 即使指令中有其他对象，也只关注区域
@@ -232,24 +251,17 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
 
     # 构建请求体
     payload = {
-        "model": "qwen-max",  # MODEL qwen-turbo, qwen-plus 
-        "messages": [
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
+        "model": "qwen-max",  # MODEL qwen-turbo, qwen-plus
+        "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.1,  # 低温度以保证输出稳定性
         "top_p": 0.8,
         "stream": False,
-        "max_tokens": 50
+        "max_tokens": 50,
     }
 
-
-    response = requests.post(url,
-                                headers=headers,
-                                data=json.dumps(payload),
-                                timeout=30)
+    response = requests.post(
+        url, headers=headers, data=json.dumps(payload), timeout=30
+    )
     response.raise_for_status()  # 检查HTTP错误
 
     result = response.json()
@@ -257,7 +269,7 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
     print("Qwen API Response:", result)
     if "choices" in result and len(result["choices"]) > 0:
         content = result["choices"][0]["message"]["content"].strip().lower()
-        
+
         # 验证返回值
         valid_responses = {"bedroom", "childroom", "kitchen"}
         if content in valid_responses:
@@ -274,6 +286,7 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
                 raise ValueError(f"无法解析指令: {user_query}")
     else:
         raise ValueError("API响应格式异常")
+
 
 def main():
     # 从配置读取
@@ -299,7 +312,6 @@ def main():
 
     print("************************************************")
 
-
     # 启动执行器
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
@@ -310,6 +322,7 @@ def main():
         executor.shutdown()
         node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()

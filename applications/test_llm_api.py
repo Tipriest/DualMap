@@ -7,9 +7,10 @@ import sys
 # 配置文件路径，保持与主程序一致
 CFG_PATH = "/home/tang123/Documents/DualMap/config/query/query_task_2_3.yaml"
 
+
 def test_qwen_api():
     print(f"正在读取配置文件: {CFG_PATH}")
-    
+
     # 1. 读取配置文件
     try:
         with open(CFG_PATH, "r") as f:
@@ -31,29 +32,28 @@ def test_qwen_api():
 
     # 3. 准备请求参数
     # 使用环境变量中的 base_url，如果没有则使用默认值
-    base_url = os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+    base_url = os.getenv(
+        "QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    )
     url = f"{base_url}/chat/completions"
-    
+
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
+        "Authorization": f"Bearer {api_key}",
     }
 
     # 构建一个简单的测试 Prompt
     payload = {
         "model": "qwen-max",  # 使用与主程序相同的模型
         "messages": [
-            {
-                "role": "system",
-                "content": "You are a helpful assistant."
-            },
+            {"role": "system", "content": "You are a helpful assistant."},
             {
                 "role": "user",
-                "content": "Please say 'API Connection Successful' and nothing else."
-            }
+                "content": "Please say 'API Connection Successful' and nothing else.",
+            },
         ],
         "temperature": 0.1,
-        "max_tokens": 50
+        "max_tokens": 50,
     }
 
     print(f"\n正在向 {url} 发送测试请求...")
@@ -61,7 +61,7 @@ def test_qwen_api():
     # 4. 发送请求
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=30)
-        
+
         # 5. 检查结果
         if response.status_code == 200:
             result = response.json()
@@ -86,6 +86,7 @@ def test_qwen_api():
     except Exception as e:
         print(f"[错误] 发生未知异常: {e}")
         return False
+
 
 if __name__ == "__main__":
     success = test_qwen_api()
