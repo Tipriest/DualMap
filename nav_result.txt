@@ -1,0 +1,5 @@
+[2026-01-25 19:56:19.956] Start: Command received - '去 卧室的床上找一个瓶子'
+[2026-01-25 20:07:21.534] Start: Command received - '卧室找床上的瓶子，不要踩到地毯'
+[2026-01-25 20:08:07.162] Start: Command received - '去 卧室找床上的瓶子，不要踩到地毯'
+[2026-01-25 20:09:28.160] Start: Command received - '去 卧室找床上的瓶子，不要踩到地毯'
+[2026-01-25 20:19:54.326] Start: Command received - '卧室找床上的瓶子，不要踩到地毯'
