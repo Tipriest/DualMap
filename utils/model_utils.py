@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+
 try:
     import torch_npu
 except ModuleNotFoundError:

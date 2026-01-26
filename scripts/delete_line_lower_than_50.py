@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 
-
 base_path = Path(__file__).resolve().parent
 log_path = base_path / ".." / "output" / "map_results" / "log"
 delete_rows_const = 250

@@ -47,7 +47,6 @@ if PROJECT_ROOT not in sys.path:
 
 # sys.path.append("/home/tang123/Documents/DualMap/applications/utils")
 sys.path.append(os.path.join(PROJECT_ROOT, "applications/utils"))
-
 from utils.object import BaseObject
 import datetime
 
