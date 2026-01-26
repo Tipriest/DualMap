@@ -45,7 +45,9 @@ PROJECT_ROOT = os.path.dirname(PROJECT_ROOT)  # DualMap/
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-sys.path.append("/home/tang123/Documents/DualMap/applications/utils")
+# sys.path.append("/home/tang123/Documents/DualMap/applications/utils")
+sys.path.append(os.path.join(PROJECT_ROOT, "applications/utils"))
+
 from utils.object import BaseObject
 import datetime
 
@@ -1480,7 +1482,8 @@ def parse_command_with_qwen(cfg_path: str, user_query: str):
 
 def main():
     # 从配置读取
-    cfg_path = "/home/tang123/Documents/DualMap/config/query/query_task_4.yaml"
+    # cfg_path = "/home/tang123/Documents/DualMap/config/query/query_task_4.yaml"
+    cfg_path = os.path.join(PROJECT_ROOT, "config/query/query_task_4.yaml")
 
     # 读取指令
     query_text = input("请输入指令：")

@@ -6,15 +6,15 @@ defaults:
 
 
 # 应该是第一天建好的图的global map的位置
-load_dir: /home/tang123/Documents/DualMap/output/map_on_oe/20260120_054551/global_map
+load_dir: ../output/20260120_054551/global_map
 
-clip_dir: /home/tang123/ViT-B-32.pt
+clip_dir: ../../model/ViT-B-32.pt
 
 # 房间边界定义 [min_x, max_x, min_y, max_y]
 # NOTE: 要检查，调整成真实尺寸，现在的数值是初步估计的
 room_edges:
   bedroom: [5.0, 11.5, -5.0, -8.5]    # 主卧
-  childroom: [7.5, 11.5, -0.5, -4.0]  # 儿童房  
+  childroom: [7.5, 11.5, -0.5, -4.0]  # 儿童房
   livingroom: [0.5, 6.5, -0.5, -4.0]  # 客厅
   kitchen: [0.5, 4.5, -5.0, -8.5]     # 厨房
 
@@ -31,4 +31,4 @@ api_key: sk-02e28def7b114e3bb8de9b2dc377b608
 
 
 # 语义障碍物体定义文件，要修改成oe的位置
-hazard_yaml_path: /home/tang123/Documents/DualMap/config/keepout_bboxes.yaml
+hazard_yaml_path: ../keepout_bboxes.yaml

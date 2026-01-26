@@ -1,6 +1,6 @@
 """
 完成task02和task03：找到相关物体 & 动态避障
-NOTE: 不包含 semantic hazard的处理部分，默认task 23没有需要避障的语义物体（地毯）
+NOTE: 不包含 semantic hazard的处理部分，默认task 23没有需要避障的语义物体(地毯)
 dualmap 主机端执行：订阅目标/相关物体/房间等，基于离线 local map 查询位置；
 并通过 Nav2 NavigateToPose 导航到目标点，并支持面向目标的旋转与recovery流程。
 """
@@ -44,7 +44,8 @@ PROJECT_ROOT = os.path.dirname(PROJECT_ROOT)                    # DualMap/
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-sys.path.append("/home/tang123/Documents/DualMap/applications/utils")
+# sys.path.append("/home/tang123/Documents/DualMap/applications/utils")
+sys.path.append(os.path.join(PROJECT_ROOT, "applications/utils"))
 from utils.object import BaseObject
 import datetime
 
@@ -1245,7 +1246,8 @@ def parse_command_with_qwen(cfg_path:str, user_query: str):
 
 def main():
     # 从配置读取
-    cfg_path = "/home/tang123/Documents/DualMap/config/query/query_task_2_3.yaml"
+    # cfg_path = "/home/tang123/Documents/DualMap/config/query/query_task_2_3.yaml"
+    cfg_path = os.path.join(PROJECT_ROOT, "config/query/query_task_2_3.yaml")
 
     # 读取指令
     query_text = input("请输入指令：")

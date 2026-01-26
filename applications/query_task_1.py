@@ -290,7 +290,8 @@ def parse_command_with_qwen(cfg_path: str, user_query: str):
 
 def main():
     # 从配置读取
-    cfg_path = "/home/tang123/Documents/DualMap/config/query/query_task_1.yaml"
+    cfg_path = os.path.join(PROJECT_ROOT, "config/query/query_task_1.yaml")
+    # cfg_path = "/home/tang123/Documents/DualMap/config/query/query_task_1.yaml"
 
     # 读取指令
     query_text = input("请输入指令：")

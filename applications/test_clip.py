@@ -20,6 +20,7 @@ import numpy as np
 import open_clip
 import torch
 import torch.nn.functional as F
+import os
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))  # applications/
 PROJECT_ROOT = os.path.dirname(PROJECT_ROOT)  # DualMap/
@@ -58,7 +59,8 @@ class TestClip:
     def init_clip(self):
         print("Loading CLIP model")
         clip_model_name = "ViT-B-32"
-        pretrained_path = "/home/tang123/ViT-B-32.pt"  # 修改为实际路径
+        # pretrained_path = "/home/tang123/ViT-B-32.pt"  # 修改为实际路径
+        pretrained_path = os.path.join(PROJECT_ROOT, "model/ViT-B-32.pt")
         self.clip_model, _, _ = open_clip.create_model_and_transforms(
             clip_model_name, pretrained=pretrained_path, device="cpu"
         )
@@ -112,6 +114,7 @@ class TestClip:
 
 
 tester = TestClip(
-    load_dir="/home/tang123/DualMap/output/map_on_oe/20260120_054551/global_map"
+    # load_dir="/home/tang123/DualMap/output/map_on_oe/20260120_054551/global_map"
+    load_dir=os.path.join(PROJECT_ROOT, "output/20260120_054551/global_map")
 )
-result = tester.query_callback("笔记本")
+result = tester.query_callback("laptop")

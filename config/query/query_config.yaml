@@ -3,7 +3,8 @@ defaults:
   - _self_
 
 
-load_dir: /home/tang123/DualMap/output/map_on_oe/20260120_054551/global_map
+# load_dir: /home/tang123/DualMap/output/map_on_oe/20260120_054551/global_map
+load_dir: ../output/20260120_054551/global_map
 
 
 # 房间边界定义 [min_x, max_x, min_y, max_y]
@@ -16,8 +17,9 @@ room_edges:
 room_anchors:
   bedroom: [3.5, -1.5]
   studyroom: [3.5, 1.5]
-  livingroom: [-3.5, 1.5] 
+  livingroom: [-3.5, 1.5]
 
 api_key: sk-02e28def7b114e3bb8de9b2dc377b608
 
-hazard_yaml_path: /home/tang123/DualMap/config/keepout_bboxes.yaml
+# hazard_yaml_path: /home/tang123/DualMap/config/keepout_bboxes.yaml
+hazard_yaml_path: ../keepout_bboxes.yaml

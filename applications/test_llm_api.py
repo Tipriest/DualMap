@@ -5,7 +5,13 @@ import json
 import sys
 
 # 配置文件路径，保持与主程序一致
-CFG_PATH = "/home/tang123/Documents/DualMap/config/query/query_task_2_3.yaml"
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))  # applications/
+PROJECT_ROOT = os.path.dirname(PROJECT_ROOT)  # DualMap/
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+CFG_PATH = os.path.join(PROJECT_ROOT, "config/query/query_task_2_3.yaml")
+# CFG_PATH = "/home/tang123/Documents/DualMap/config/query/query_task_2_3.yaml"
 
 
 def test_qwen_api():
