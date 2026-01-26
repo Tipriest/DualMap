@@ -28,6 +28,7 @@ from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid, Odometry
 from sensor_msgs.msg import Image
 from action_msgs.msg import GoalStatus
+from std_msgs.msg import String
 
 
 class TaskSubscriber(Node):
@@ -64,17 +65,19 @@ class TaskSubscriber(Node):
             callback_group=self._cbg,
         )
 
+        # SJQ: publisher 发布相关物体的 bbox 信息，供 dualmap 端接收，对应的函数在下方标记
+        # FIXME: 这里注意这个bbox有可能是锚点物体，也有可能是房间
+        self.related_bbox_pub = self.create_publisher(
+            String, '/dualmap/search_request', 10
+        )
+
         # SJQ: 此处订阅DUALMAP传回的检索结果
         self.dualmp_sub = self.create_subscription(
-            PoseStamped,
-            "/remap_target_position",
+            String,
+            "/dualmap/search_result",
             self.remap_target_callback,
             10,
             callback_group=self._cbg,
-        )
-        # SJQ: publisher 发布相关物体的 bbox 信息，供 dualmap 端接收，对应的函数在下方标记
-        self.related_bbox_pub = self.create_publisher(
-            PoseStamped, '/related_bbox_junqi_only', 10
         )
 
         # ====== Nav2 Action Client ======
@@ -614,29 +617,34 @@ class TaskSubscriber(Node):
             except Exception as e:
                 self.get_logger().error(f"Worker exception: {repr(e)}")
 
+    def _build_request_json(
+        self, name: str, bbox, score_th: Optional[float], continuous: bool
+    ) -> str:
+        payload = {"name": name, "bbox": bbox, "continuous": bool(continuous)}
+        if score_th is not None:
+            payload["score_th"] = float(score_th)
+        return json.dumps(payload, ensure_ascii=False)
+
     def publish_related_bbox(self, cx, cy, width, height, label):
         # SJQ: 此处为发布相关物体的 bbox 信息[name, center_x, center_y, width, height]，供 dualmap 端接收
-        """临时发布边界框（使用PoseStamped）"""
-        msg = PoseStamped()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        # frame_id 填充 target_name 的 str
-        msg.header.frame_id = self.target_name
+        """临时发布边界框(使用PoseStamped)"""
+        # TODO: 这里要验证能不能降级到一个室内
+        msg = String()
+        bbox = [
+            cx - width / 2,
+            cy - height / 2,
+            cx + width / 2,
+            cy + height / 2,
+        ]
+        score_th = 0.45
 
-        # 用第一个位姿表示中心
-        from geometry_msgs.msg import Pose
-
-        center_pose = Pose()
-        center_pose.position.x = cx
-        center_pose.position.y = cy
-        center_pose.position.z = 0.0
-
-        # orientation xy 存储 width 和 height
-        center_pose.orientation.x = width
-        center_pose.orientation.y = height
-
-        msg.pose = center_pose
+        msg.data = self._build_request_json(
+            self.target_name, bbox, score_th, continuous=False
+        )
+        self.get_logger().info(
+            f"[SearchTest][ROS2] published request -> /dualmap/search_request: {msg.data}"
+        )
         self.related_bbox_pub.publish(msg)
-        self.get_logger().info(f"发布临时bbox: {label} at ({cx}, {cy})")
 
     def _goto_and_face_target(
         self, free_x: float, free_y: float, tx: float, ty: float
@@ -663,21 +671,41 @@ class TaskSubscriber(Node):
             wait_timeout=5.0,
         )
 
-    def remap_target_callback(self, msg: PoseStamped):
-        # SJQ: 这里解析位置，赋值给 self.target_x, self.target_y
-        """收到目标物体位置后，发布该位置"""
-        remap_status = msg.header.frame_id
-        if remap_status == "success":
-            self.target_x = msg.pose.position.x
-            self.target_y = msg.pose.position.y
-            self.get_logger().info(
-                f"收到目标物体位置: x={self.target_x:.3f}, y={self.target_y:.3f}"
-            )
+    def _parse_search_result_data(self, payload: str) -> dict:
+        """
+        Request JSON format (std_msgs/String):
+          {
+            "name": "mug",
+            "center": [x, y, z]  // world XY (optionally 6 elems with zmin/zmax)
+            "score": 0.35,                     // optional
+            "uid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  // optional
+          }
+        """
+        try:
+            data = json.loads(payload)
+        except Exception:
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return data
 
-        else:
-            self.target_x = 0
-            self.target_y = 0
-            self.get_logger().info("Fail to get target, failed, QAQ.")
+    def remap_target_callback(self, msg: String):
+        # SJQ: 这里解析位置，赋值给 self.target_x, self.target_y
+        self.get_logger().info(
+            f"[SearchTest][ROS2] received result <- /dualmap/search_result: {msg.data}"
+        )
+        data = self._parse_search_result_data(msg.data)
+        name = data.get("name", None)
+        target_point = data.get("center", None)
+        score = data.get("score", None)
+
+        with self._lock:
+            self.target_x = target_point[0]
+            self.target_y = target_point[1]
+
+        self.get_logger().info(
+            f"[Query][SearchTestResultReceived][ROS2] name = {name}, parsed target: x={self.target_x:.3f}, y={self.target_y:.3f}, score = {score}"
+        )
 
     # ====================== Nav2 Action：异步 + Event 等待 ======================
 
