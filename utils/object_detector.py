@@ -230,21 +230,21 @@ class Detector:
                 logger.error(f"[Detector][Init] Error loading YOLO model: {e}")
                 return
 
-            # try:
-            #     # Segmentation module
-            #     logger.info(
-            #         f"[Detector][Init] Loading SAM model from\t{cfg.sam.model_path}"
-            #     )
-            #     self.mobile_sam_model = sam_model_registry[cfg.sam.model_type](checkpoint=cfg.sam.model_path)
-            #     # self.sam:SAM = SAM(cfg.sam.model_path)
-            #     self.mobile_sam_model.to(device=cfg.sam.device)
-            #     self.mobile_sam_model.eval()
-            #     self.mobile_sam_predictor = SamPredictor(self.mobile_sam_model)
+            try:
+                # Segmentation module
+                logger.info(
+                    f"[Detector][Init] Loading SAM model from\t{cfg.sam.model_path}"
+                )
+                self.mobile_sam_model = sam_model_registry[cfg.sam.model_type](checkpoint=cfg.sam.model_path)
+                # self.sam:SAM = SAM(cfg.sam.model_path)
+                self.mobile_sam_model.to(device=cfg.sam.device)
+                self.mobile_sam_model.eval()
+                self.mobile_sam_predictor = SamPredictor(self.mobile_sam_model)
 
-            #     self.sam = SamWrapper(self.mobile_sam_predictor, cfg.sam.device)
-            # except Exception as e:
-            #     logger.error(f"[Detector][Init] Error loading SAM model: {e}")
-            #     return
+                self.sam = SamWrapper(self.mobile_sam_predictor, cfg.sam.device)
+            except Exception as e:
+                logger.error(f"[Detector][Init] Error loading SAM model: {e}")
+                return
 
             # Open fastsam for open vocabulary detection(为开放词汇检测打开fastsam)
             if cfg.use_fastsam:
