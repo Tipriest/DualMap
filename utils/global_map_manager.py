@@ -4,7 +4,7 @@ import os
 import pdb
 import shutil
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import open3d as o3d
@@ -806,7 +806,11 @@ class GlobalMapManager(BaseMapManager):
         """
 
         import torch
-        import torch_npu
+
+        try:
+            import torch_npu
+        except ModuleNotFoundError:
+            pass
         import torch.nn.functional as F
 
         text_query_ft = self.inquiry
@@ -909,3 +913,104 @@ class GlobalMapManager(BaseMapManager):
         # input("Press any key to continue...")
 
         return best_candidate, best_similarity
+
+    def _to_numpy_feat(
+        self, feat: Union[np.ndarray, "torch.Tensor"]
+    ) -> np.ndarray:
+        """Accept torch.Tensor (cpu/cuda) or np.ndarray and return float32 numpy (D,)."""
+        # local import to avoid hard dependency at import-time
+        try:
+            import torch  # type: ignore
+        except Exception:
+            torch = None
+
+        if (
+            torch is not None
+            and hasattr(torch, "is_tensor")
+            and torch.is_tensor(feat)
+        ):
+            feat = feat.detach()
+            if feat.is_cuda:
+                feat = feat.cpu()
+            feat = feat.numpy()
+
+        feat = np.asarray(feat, dtype=np.float32).reshape(-1)
+        n = np.linalg.norm(feat)
+        return feat / (n + 1e-12)
+
+    def _cos_sim(self, a: np.ndarray, b: np.ndarray) -> float:
+        a = self._to_numpy_feat(a)
+        b = self._to_numpy_feat(b)
+        return float(np.dot(a, b))
+
+    def filter_global_objects_in_bbox(
+        self,
+        query_bbox: o3d.geometry.AxisAlignedBoundingBox,
+        expand_ratio: float = 0.0,
+    ) -> List[GlobalObject]:
+        """
+        Filter global objects whose bbox_2d CENTER is inside the query_bbox in XY plane.
+        expand_ratio expands query bbox in XY.
+        """
+        if query_bbox is None:
+            return []
+
+        qmin = np.array(query_bbox.get_min_bound(), dtype=np.float32)
+        qmax = np.array(query_bbox.get_max_bound(), dtype=np.float32)
+
+        expand = (qmax - qmin) * float(expand_ratio)
+        qmin[:2] -= expand[:2]
+        qmax[:2] += expand[:2]
+
+        out: List[GlobalObject] = []
+        for obj in self.global_map:
+            if obj.bbox_2d is None:
+                continue
+
+            c = np.array(obj.bbox_2d.get_center(), dtype=np.float32)
+
+            # keep if center within bbox (XY)
+            if (qmin[0] <= c[0] <= qmax[0]) and (qmin[1] <= c[1] <= qmax[1]):
+                out.append(obj)
+
+        return out
+
+    def search_similar_object_in_bbox(
+        self,
+        query_feat: Union[np.ndarray, "torch.Tensor"],
+        query_bbox: o3d.geometry.AxisAlignedBoundingBox,
+        sim_threshold: float = 0.30,
+        expand_ratio: float = 0.10,
+    ) -> Tuple[Optional[GlobalObject], float]:
+        """
+        Search the most similar global object within bbox (XY), considering obj.clip_ft and obj.related_objs.
+        Returns (best_obj or None, best_score).
+        """
+        candidates = self.filter_global_objects_in_bbox(
+            query_bbox=query_bbox, expand_ratio=expand_ratio
+        )
+        if not candidates:
+            return None, 0.0
+
+        q = self._to_numpy_feat(query_feat)
+
+        best_obj: Optional[GlobalObject] = None
+        best_sim: float = -1.0
+
+        for obj in candidates:
+            # base sim
+            sim = self._cos_sim(q, obj.clip_ft)
+
+            # related sim
+            if getattr(obj, "related_objs", None):
+                for rel_ft in obj.related_objs:
+                    sim = max(sim, self._cos_sim(q, rel_ft))
+
+            if sim > best_sim:
+                best_sim = sim
+                best_obj = obj
+
+        if best_obj is None or best_sim < float(sim_threshold):
+            return None, float(best_sim if best_sim >= 0 else 0.0)
+
+        return best_obj, float(best_sim)

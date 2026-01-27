@@ -102,5 +102,5 @@ use_given_path: False
 given_path_dir: ""
 
 # connect tcp
-use_tcp: True
+use_tcp: False
 tcp_address: "192.168.11.200:9876"

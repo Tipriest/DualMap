@@ -16,22 +16,28 @@ import open3d as o3d
 import open_clip
 import supervision as sv
 import torch
-import torch_npu
-from torch_npu.contrib import transfer_to_npu
+
+try:
+    import torch_npu
+    from torch_npu.contrib import transfer_to_npu
+
+    sys.path.insert(0, "/data/torch_npu/MobileSAM")
+    from mobile_sam import sam_model_registry, SamPredictor, SamWrapper
+
+    sys.path.insert(0, "/data")
+    from robot_servicer_dev_kit.servicers.ascend_server import YOLOv10 as YOLO
+
+    torch.npu.set_compile_mode(jit_compile=False)
+except ModuleNotFoundError:
+    from ultralytics import YOLO
+
 from omegaconf import DictConfig
 from PIL import Image
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 from sklearn.metrics.pairwise import cosine_similarity
 import sys
-sys.path.insert(0, "/data/torch_npu/MobileSAM")
-from mobile_sam import sam_model_registry, SamPredictor, SamWrapper
 from ultralytics import FastSAM
-
-sys.path.insert(0, "/data")
-from robot_servicer_dev_kit.servicers.ascend_server import YOLOv10 as YOLO
-torch.npu.set_compile_mode(jit_compile=False)
-
 from utils.pcd_utils import (
     mask_depth_to_points,
     refine_points_with_clustering,
@@ -202,28 +208,43 @@ class Detector:
 
                 # 创建模型实例
 
-                self.yolo: YOLO = YOLO.YOLO(cfg.yolo.model_path)
-                self.yolo.init_resource()
+                # 根据不同权重设置类别/文本编码
+                if yolo_name == "yolov8l-world.pt":
+                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
+                    self.yolo.set_classes(self.obj_classes.get_classes_arr())
+                elif yolo_name == "yoloe-v8l-seg.pt":
+                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
+                    names = self.obj_classes.get_classes_arr()
+                    self.yolo.set_classes(names, self.yolo.get_text_pe(names))
+                elif yolo_name == "last.pt":
+                    pass
+                elif yolo_name.split(".")[-1] == "om":
+                    self.yolo: YOLO = YOLO.YOLO(cfg.yolo.model_path)
+                    self.yolo.init_resource()
+                else:
+                    self.yolo: YOLO = YOLO(cfg.yolo.model_path)
+                    names = self.obj_classes.get_classes_arr()
+                    self.yolo.set_classes(names, self.yolo.get_text_pe(names))
 
             except Exception as e:
                 logger.error(f"[Detector][Init] Error loading YOLO model: {e}")
                 return
 
-            try:
-                # Segmentation module
-                logger.info(
-                    f"[Detector][Init] Loading SAM model from\t{cfg.sam.model_path}"
-                )
-                self.mobile_sam_model = sam_model_registry[cfg.sam.model_type](checkpoint=cfg.sam.model_path)
-                # self.sam:SAM = SAM(cfg.sam.model_path)
-                self.mobile_sam_model.to(device=cfg.sam.device)
-                self.mobile_sam_model.eval()
-                self.mobile_sam_predictor = SamPredictor(self.mobile_sam_model)
+            # try:
+            #     # Segmentation module
+            #     logger.info(
+            #         f"[Detector][Init] Loading SAM model from\t{cfg.sam.model_path}"
+            #     )
+            #     self.mobile_sam_model = sam_model_registry[cfg.sam.model_type](checkpoint=cfg.sam.model_path)
+            #     # self.sam:SAM = SAM(cfg.sam.model_path)
+            #     self.mobile_sam_model.to(device=cfg.sam.device)
+            #     self.mobile_sam_model.eval()
+            #     self.mobile_sam_predictor = SamPredictor(self.mobile_sam_model)
 
-                self.sam = SamWrapper(self.mobile_sam_predictor, cfg.sam.device)
-            except Exception as e:
-                logger.error(f"[Detector][Init] Error loading SAM model: {e}")
-                return
+            #     self.sam = SamWrapper(self.mobile_sam_predictor, cfg.sam.device)
+            # except Exception as e:
+            #     logger.error(f"[Detector][Init] Error loading SAM model: {e}")
+            #     return
 
             # Open fastsam for open vocabulary detection(为开放词汇检测打开fastsam)
             if cfg.use_fastsam:
@@ -627,7 +648,7 @@ class Detector:
             # 防止越界，取整并 clip
             x1 = int(max(0, min(w - 1, x1)))
             y1 = int(max(0, min(h - 1, y1)))
-            x2 = int(max(0, min(w, x2)))   # 右下角常用半开区间 [x1, x2)
+            x2 = int(max(0, min(w, x2)))  # 右下角常用半开区间 [x1, x2)
             y2 = int(max(0, min(h, y2)))
 
             if x2 <= x1 or y2 <= y1:
@@ -641,17 +662,19 @@ class Detector:
         masks_tensor = torch.from_numpy(masks)
 
         # 构造一个与 SAM 结果兼容的对象
-        MasksObj = type("Masks", (), {})   # 简单的空类
+        MasksObj = type("Masks", (), {})  # 简单的空类
         ResultObj = type("Result", (), {})
 
         masks_obj = MasksObj()
-        masks_obj.data = masks_tensor      # 和你后面 sam_out[0].masks.data 对应
+        masks_obj.data = masks_tensor  # 和你后面 sam_out[0].masks.data 对应
 
         result_obj = ResultObj()
         result_obj.masks = masks_obj
 
         if verbose:
-            print(f"[FakeSAM] generated {num_boxes} masks, image size: ({h}, {w})")
+            print(
+                f"[FakeSAM] generated {num_boxes} masks, image size: ({h}, {w})"
+            )
 
         # 保持和 self.sam.predict 一样返回 list[result]
         return [result_obj]
@@ -802,7 +825,7 @@ class Detector:
         xyxy_np = xyxy_tensor.cpu().numpy()
 
         # ----- 关键部分：把YOLO输出的mask resize到原图尺寸 -----
-        if(None is results[0].masks):
+        if None is results[0].masks:
             print("results[0].masks is None")
             return (
                 confidence_np,
@@ -818,9 +841,7 @@ class Detector:
         n_masks, h_mask, w_mask = masks_np_raw.shape
 
         if (h_mask, w_mask) != (orig_h, orig_w):
-            resized_masks = np.zeros(
-                (n_masks, orig_h, orig_w), dtype=bool
-            )
+            resized_masks = np.zeros((n_masks, orig_h, orig_w), dtype=bool)
             for i in range(n_masks):
                 # 使用最近邻插值避免引入非0/1值
                 resized = cv2.resize(
@@ -976,9 +997,14 @@ class Detector:
                 fastsam_thread.start()
 
             # Run YOLO and SAM, 获得self.curr_detections
-            # print("begin process_yolo_with_sam")
-            self.process_yolo_with_sam(color)
-            # print("finish process_yolo_with_sam")
+            yolo_name: str = self.cfg.yolo.model_path.split('/')[-1]
+            if yolo_name == "yolov8l-world.pt":
+                self.process_yolo_with_sam(color)
+            elif yolo_name == "yoloe-v8l-seg.pt":
+                self.process_yolo_without_sam(color)
+            else:
+                self.process_yolo_with_sam(color)
+
             # Waiting for FastSAM to finish
             if self.cfg.use_fastsam:
                 fastsam_thread.join()
@@ -1002,9 +1028,7 @@ class Detector:
 
         # run_filter 可能返回 None 或 0 个检测
         if filtered_detections is None or self.filter.get_len() == 0:
-            logger.warning(
-                "[Detector] 过滤后当前帧中没有有效的检测结果。"
-            )
+            logger.warning("[Detector] 过滤后当前帧中没有有效的检测结果。")
             self.curr_results = {}
             return
 
@@ -1046,7 +1070,7 @@ class Detector:
 
         # print("finish use clip")
         time_after_clip_process = time.time()
-        print(f"clip use time: {time_after_clip_process - time_before_clip_process:.3f}")
+        # print(f"clip use time: {time_after_clip_process - time_before_clip_process:.3f}")
 
         results = {
             # SAM Info
@@ -1274,7 +1298,9 @@ class Detector:
 
         return point_cloud
 
-    def depth_to_point_cloud_debug(self, sample_rate=1) -> o3d.geometry.PointCloud:
+    def depth_to_point_cloud_debug(
+        self, sample_rate=1
+    ) -> o3d.geometry.PointCloud:
         """
         调试版：Convert depth image to a point cloud and transform it to world coordinates.
         在关键步骤增加日志与断言，帮助定位 Illegal instruction 问题。
@@ -1337,7 +1363,9 @@ class Detector:
         )
 
         if num_valid == 0:
-            logger.warning("[depth_to_point_cloud] No valid depth pixels, return empty point cloud.")
+            logger.warning(
+                "[depth_to_point_cloud] No valid depth pixels, return empty point cloud."
+            )
             return o3d.geometry.PointCloud()
 
         depth_valid = depth[valid_mask]
@@ -1360,14 +1388,17 @@ class Detector:
         v = v_full[valid_mask]
 
         # 对照一下长度是否一致
-        assert u.shape == depth_valid.shape, \
-            f"u shape {u.shape} != depth_valid shape {depth_valid.shape}"
-        assert v.shape == depth_valid.shape, \
-            f"v shape {v.shape} != depth_valid shape {depth_valid.shape}"
+        assert (
+            u.shape == depth_valid.shape
+        ), f"u shape {u.shape} != depth_valid shape {depth_valid.shape}"
+        assert (
+            v.shape == depth_valid.shape
+        ), f"v shape {v.shape} != depth_valid shape {depth_valid.shape}"
 
         if sample_rate < 1:
             logger.warning(
-                "[depth_to_point_cloud] sample_rate=%d < 1, reset to 1", sample_rate
+                "[depth_to_point_cloud] sample_rate=%d < 1, reset to 1",
+                sample_rate,
             )
             sample_rate = 1
 
@@ -1382,7 +1413,9 @@ class Detector:
         )
 
         if depth_sampled.shape[0] == 0:
-            logger.warning("[depth_to_point_cloud] after sampling, no points left, return empty cloud.")
+            logger.warning(
+                "[depth_to_point_cloud] after sampling, no points left, return empty cloud."
+            )
             return o3d.geometry.PointCloud()
 
         # ------------ 内参转换到相机坐标 ------------
@@ -1390,12 +1423,17 @@ class Detector:
         cx, cy = intrinsics[0, 2], intrinsics[1, 2]
         logger.info(
             "[depth_to_point_cloud] fx=%.4f, fy=%.4f, cx=%.4f, cy=%.4f",
-            float(fx), float(fy), float(cx), float(cy),
+            float(fx),
+            float(fy),
+            float(cx),
+            float(cy),
         )
 
         # 防止除零
         if fx == 0 or fy == 0:
-            logger.error("[depth_to_point_cloud] fx or fy is 0, cannot project.")
+            logger.error(
+                "[depth_to_point_cloud] fx or fy is 0, cannot project."
+            )
             return o3d.geometry.PointCloud()
 
         x = (u - cx) * depth_sampled / fx
@@ -1405,9 +1443,12 @@ class Detector:
         logger.info(
             "[depth_to_point_cloud] camera coords stats: "
             "x[min=%.4f, max=%.4f], y[min=%.4f, max=%.4f], z[min=%.4f, max=%.4f]",
-            float(x.min()), float(x.max()),
-            float(y.min()), float(y.max()),
-            float(z.min()), float(z.max()),
+            float(x.min()),
+            float(x.max()),
+            float(y.min()),
+            float(y.max()),
+            float(z.min()),
+            float(z.max()),
         )
 
         # ------------ 相机坐标 -> 齐次坐标 -> 世界坐标 ------------
@@ -1420,7 +1461,10 @@ class Detector:
 
         # 齐次
         points_homogeneous = np.hstack(
-            (points_camera, np.ones((points_camera.shape[0], 1), dtype=points_camera.dtype))
+            (
+                points_camera,
+                np.ones((points_camera.shape[0], 1), dtype=points_camera.dtype),
+            )
         )
         logger.info(
             "[depth_to_point_cloud] points_homogeneous shape: %s, dtype: %s",
@@ -1430,20 +1474,27 @@ class Detector:
 
         # 检查 pose 形状
         if pose.shape != (4, 4):
-            logger.error("[depth_to_point_cloud] pose shape is %s, expect (4,4)", pose.shape)
+            logger.error(
+                "[depth_to_point_cloud] pose shape is %s, expect (4,4)",
+                pose.shape,
+            )
             return o3d.geometry.PointCloud()
 
-        logger.info("[depth_to_point_cloud] before matmul: pose @ points_homogeneous.T")
+        logger.info(
+            "[depth_to_point_cloud] before matmul: pose @ points_homogeneous.T"
+        )
         pts_T = points_homogeneous.T
         logger.info(
             "[depth_to_point_cloud] pts_T shape: %s, dtype: %s",
-            pts_T.shape, pts_T.dtype,
+            pts_T.shape,
+            pts_T.dtype,
         )
 
         mid = pose @ pts_T
         logger.info(
             "[depth_to_point_cloud] mid shape (pose @ pts_T): %s, dtype: %s",
-            mid.shape, mid.dtype,
+            mid.shape,
+            mid.dtype,
         )
 
         points_world_homogeneous = mid.T
@@ -1461,9 +1512,12 @@ class Detector:
             "[depth_to_point_cloud] points_world shape: %s, "
             "x[min=%.4f, max=%.4f], y[min=%.4f, max=%.4f], z[min=%.4f, max=%.4f]",
             points_world.shape,
-            float(points_world[:, 0].min()), float(points_world[:, 0].max()),
-            float(points_world[:, 1].min()), float(points_world[:, 1].max()),
-            float(points_world[:, 2].min()), float(points_world[:, 2].max()),
+            float(points_world[:, 0].min()),
+            float(points_world[:, 0].max()),
+            float(points_world[:, 1].min()),
+            float(points_world[:, 1].max()),
+            float(points_world[:, 2].min()),
+            float(points_world[:, 2].max()),
         )
 
         # ------------ 创建 Open3D 点云（关键：C 扩展入口） ------------
@@ -1484,7 +1538,9 @@ class Detector:
         logger.info("[depth_to_point_cloud] ====== END ======")
         return point_cloud
 
-    def depth_to_point_cloud_safe(self, sample_rate=1) -> o3d.geometry.PointCloud:
+    def depth_to_point_cloud_safe(
+        self, sample_rate=1
+    ) -> o3d.geometry.PointCloud:
         """
         更安全的调试版：避免使用大矩阵乘 (pose @ pts_T)，
         改用 R、t 形式逐元素变换，绕过有问题的 BLAS 内核。
@@ -1545,7 +1601,9 @@ class Detector:
         )
 
         if num_valid == 0:
-            logger.warning("[depth_to_point_cloud] No valid depth pixels, return empty point cloud.")
+            logger.warning(
+                "[depth_to_point_cloud] No valid depth pixels, return empty point cloud."
+            )
             return o3d.geometry.PointCloud()
 
         depth_valid = depth[valid_mask]
@@ -1572,7 +1630,8 @@ class Detector:
 
         if sample_rate < 1:
             logger.warning(
-                "[depth_to_point_cloud] sample_rate=%d < 1, reset to 1", sample_rate
+                "[depth_to_point_cloud] sample_rate=%d < 1, reset to 1",
+                sample_rate,
             )
             sample_rate = 1
 
@@ -1587,7 +1646,9 @@ class Detector:
         )
 
         if depth_sampled.shape[0] == 0:
-            logger.warning("[depth_to_point_cloud] after sampling, no points left, return empty cloud.")
+            logger.warning(
+                "[depth_to_point_cloud] after sampling, no points left, return empty cloud."
+            )
             return o3d.geometry.PointCloud()
 
         # ---------- 像素 -> 相机坐标 ----------
@@ -1595,11 +1656,16 @@ class Detector:
         cx, cy = intrinsics[0, 2], intrinsics[1, 2]
         logger.info(
             "[depth_to_point_cloud] fx=%.4f, fy=%.4f, cx=%.4f, cy=%.4f",
-            float(fx), float(fy), float(cx), float(cy),
+            float(fx),
+            float(fy),
+            float(cx),
+            float(cy),
         )
 
         if fx == 0 or fy == 0:
-            logger.error("[depth_to_point_cloud] fx or fy is 0, cannot project.")
+            logger.error(
+                "[depth_to_point_cloud] fx or fy is 0, cannot project."
+            )
             return o3d.geometry.PointCloud()
 
         x = (u - cx) * depth_sampled / fx
@@ -1609,9 +1675,12 @@ class Detector:
         logger.info(
             "[depth_to_point_cloud] camera coords stats: "
             "x[min=%.4f, max=%.4f], y[min=%.4f, max=%.4f], z[min=%.4f, max=%.4f]",
-            float(x.min()), float(x.max()),
-            float(y.min()), float(y.max()),
-            float(z.min()), float(z.max()),
+            float(x.min()),
+            float(x.max()),
+            float(y.min()),
+            float(y.max()),
+            float(z.min()),
+            float(z.max()),
         )
 
         points_camera = np.vstack((x, y, z)).T
@@ -1623,14 +1692,18 @@ class Detector:
 
         # ---------- 相机坐标 -> 世界坐标（不使用大矩阵乘） ----------
         if pose.shape != (4, 4):
-            logger.error("[depth_to_point_cloud] pose shape is %s, expect (4,4)", pose.shape)
+            logger.error(
+                "[depth_to_point_cloud] pose shape is %s, expect (4,4)",
+                pose.shape,
+            )
             return o3d.geometry.PointCloud()
 
-        R = pose[:3, :3]   # (3, 3)
-        t = pose[:3, 3]    # (3,)
+        R = pose[:3, :3]  # (3, 3)
+        t = pose[:3, 3]  # (3,)
         logger.info(
             "[depth_to_point_cloud] using R,t transform: R shape=%s, t.shape=%s",
-            R.shape, t.shape,
+            R.shape,
+            t.shape,
         )
 
         # 为了最大限度避免调到奇怪的 BLAS 内核，你可以选下面“逐元素”版本：
@@ -1652,9 +1725,12 @@ class Detector:
             "[depth_to_point_cloud] points_world shape: %s, "
             "x[min=%.4f, max=%.4f], y[min=%.4f, max=%.4f], z[min=%.4f, max=%.4f]",
             points_world.shape,
-            float(points_world[:, 0].min()), float(points_world[:, 0].max()),
-            float(points_world[:, 1].min()), float(points_world[:, 1].max()),
-            float(points_world[:, 2].min()), float(points_world[:, 2].max()),
+            float(points_world[:, 0].min()),
+            float(points_world[:, 0].max()),
+            float(points_world[:, 1].min()),
+            float(points_world[:, 1].max()),
+            float(points_world[:, 2].min()),
+            float(points_world[:, 2].max()),
         )
 
         # ---------- 创建 Open3D 点云 ----------
@@ -1667,7 +1743,9 @@ class Detector:
             points_world.shape[0],
         )
         # 确保是 float64
-        point_cloud.points = o3d.utility.Vector3dVector(points_world.astype(np.float64))
+        point_cloud.points = o3d.utility.Vector3dVector(
+            points_world.astype(np.float64)
+        )
         logger.info(
             "[depth_to_point_cloud] after setting points, len(point_cloud.points)=%d",
             len(point_cloud.points),
@@ -1712,7 +1790,9 @@ class Detector:
         image = cv2.cvtColor(self.curr_data.color, cv2.COLOR_BGR2RGB)
 
         if self.curr_results is not {} or self.curr_results is not None:
-            print(f"[save_detection_results][self.curr_results]: {self.curr_results}")
+            print(
+                f"[save_detection_results][self.curr_results]: {self.curr_results}"
+            )
             if hasattr(self.curr_results, "xyxy"):
                 detections = sv.Detections(
                     xyxy=self.curr_results["xyxy"],
@@ -2320,7 +2400,9 @@ class Detector:
 
             # Preprocess the cropped image
             # 预处理裁剪的图像
-            preprocessed_image = clip_preprocess(cropped_image).unsqueeze(0).to(device)
+            preprocessed_image = (
+                clip_preprocess(cropped_image).unsqueeze(0).to(device)
+            )
             preprocessed_images.append(preprocessed_image)
 
             # Get the class id for the detection
@@ -2801,7 +2883,12 @@ def if_same_distribution(img1, img2, mask1, mask2, sim_threshold):
         )
         return False
 
-    if mask1.size == 0 or mask2.size == 0 or (not mask1.any()) or (not mask2.any()):
+    if (
+        mask1.size == 0
+        or mask2.size == 0
+        or (not mask1.any())
+        or (not mask2.any())
+    ):
         logger.warning(
             "[Detector][Filter] if_same_distribution: empty or all-false mask. "
             "mask1.shape=%s, mask2.shape=%s",
@@ -2874,7 +2961,9 @@ def if_same_distribution(img1, img2, mask1, mask2, sim_threshold):
     hist2 = np.concatenate([hist_b2, hist_g2, hist_r2])
 
     # Compute cosine similarity
-    cos_sim = np.dot(hist1, hist2) / (np.linalg.norm(hist1) * np.linalg.norm(hist2))
+    cos_sim = np.dot(hist1, hist2) / (
+        np.linalg.norm(hist1) * np.linalg.norm(hist2)
+    )
 
     return cos_sim > sim_threshold
 

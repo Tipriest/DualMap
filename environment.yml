@@ -12,7 +12,7 @@ dependencies:
   - mkl
   - blas=1.0=mkl
   - pip:
-      - torch
+      - torch==2.5.1
       - torchvision
       - torchaudio
       - tyro

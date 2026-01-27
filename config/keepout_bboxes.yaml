@@ -1,0 +1,13 @@
+bboxes:
+  - frame: map
+    corners:
+      - [3.2, -4.3]
+      - [5.9, -4.3]
+      - [5.9, -3.2]
+      - [3.2, -3.2]
+resolution: 0.01
+topic: /keepout_filter_mask
+publish_rate: 0.1
+target_frame: map
+max_cells: 400000
+    

@@ -1,6 +1,10 @@
 import numpy as np
 import torch
-import torch_npu
+
+try:
+    import torch_npu
+except ModuleNotFoundError:
+    pass
 from PIL import Image
 
 
