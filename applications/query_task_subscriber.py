@@ -66,7 +66,7 @@ class TaskSubscriber(Node):
         )
 
         # SJQ: publisher 发布相关物体的 bbox 信息，供 dualmap 端接收，对应的函数在下方标记
-        # FIXME: 这里注意这个bbox有可能是锚点物体，也有可能是房间
+        # 这里注意这个bbox有可能是锚点物体，也有可能是房间
         self.related_bbox_pub = self.create_publisher(
             String, '/dualmap/search_request', 10
         )
