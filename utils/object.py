@@ -191,9 +191,7 @@ class BaseObject:
     def save_obj_to_disk(self, save_sub_path: str):
         """Save the object to disk using pickle."""
         if self.save_path is None:
-            logger.warning(
-                "[BaseObject] save_path is None, skipping save_to_disk"
-            )
+            logger.warning("[BaseObject] save_path is None, skipping save_to_disk")
             return
 
         with open(self.save_path, "wb") as f:
@@ -207,27 +205,35 @@ class BaseObject:
             masked_save_dir = os.path.join(save_dir, "masked")
             os.makedirs(cropped_save_dir, exist_ok=True)
             os.makedirs(masked_save_dir, exist_ok=True)
-            for obs_idx, obs in enumerate(self.observations):
-                # obs_idx = obs.idx
-                # cropped_image = obs.cropped_image
-                # masked_image = obs.masked_image
-                # cropped_image_dir = os.path.join(cropped_save_dir, f"{obs_idx}.png")
-                # masked_image_dir = os.path.join(masked_save_dir, f"{obs_idx}.png")
-                # # both cropped and masked images are np.ndarray, so save as png
-                # import imageio
 
-                # imageio.imwrite(cropped_image_dir, cropped_image)
-                # imageio.imwrite(masked_image_dir, masked_image)
+            for obs_idx, obs in enumerate(self.observations):
+                # 保存 cropped_images
                 for _i, cropped_image in enumerate(obs.cropped_images):
                     cropped_image_dir = os.path.join(
-                        cropped_save_dir, f"{_i}.png"
+                        cropped_save_dir, f"{obs_idx}_{_i}.png"
                     )
-                    imageio.imwrite(cropped_image_dir, cropped_image)
+                    try:
+                        imageio.imwrite(cropped_image_dir, cropped_image)
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to save cropped image for obs_idx=%s, idx=%s, "
+                            "path=%s, error=%s",
+                            obs_idx, _i, cropped_image_dir, repr(e)
+                        )
+
+                # 保存 masked_images
                 for _i, masked_image in enumerate(obs.masked_images):
                     masked_image_dir = os.path.join(
-                        masked_save_dir, f"{_i}.png"
+                        masked_save_dir, f"{obs_idx}_{_i}.png"
                     )
-                    imageio.imwrite(masked_image_dir, masked_image)
+                    try:
+                        imageio.imwrite(masked_image_dir, masked_image)
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to save masked image for obs_idx=%s, idx=%s, "
+                            "path=%s, error=%s",
+                            obs_idx, _i, masked_image_dir, repr(e)
+                        )
 
     @staticmethod
     def load_from_disk(filename: str):

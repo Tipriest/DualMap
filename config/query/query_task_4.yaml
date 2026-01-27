@@ -6,26 +6,27 @@ defaults:
 
 
 # 应该是第一天建好的图的global map的位置
-load_dir: ../output/20260120_054551/global_map
+load_dir: /data/test/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/20260127_163042/global_map
 
 clip_dir: ../../model/ViT-B-32.pt
 
 # 房间边界定义 [min_x, max_x, min_y, max_y]
 # NOTE: 要检查，调整成真实尺寸，现在的数值是初步估计的
 room_edges:
-  bedroom: [5.0, 11.5, -5.0, -8.5]    # 主卧
-  childroom: [7.5, 11.5, -0.5, -4.0]  # 儿童房
-  livingroom: [0.5, 6.5, -0.5, -4.0]  # 客厅
-  kitchen: [0.5, 4.5, -5.0, -8.5]     # 厨房
+  bedroom: [3.60, 10.40, -7.45, -4.40]
+  childroom: [5.60, 10.40, -3.50, 1.60]
+  livingroom: [-1.50, 5.60, -3.30, 1.60]
+  kitchen: [-1.50, 3.70, -7.20, -3.36]
 
 
 # 房间开阔锚点定义 [x, y]，如果没有找到related 物体，就返回这个点进行转圈recovery
 # NOTE: 要检查，调整成真实尺寸，现在的数值是初步估计的
 room_anchors:
-  bedroom: [6.0, -6.0]              # 对应区域：主卧床头桌区域
-  childroom: [8.0, -3.5]     # 对应区域：儿童看护
-  livingroom: [2.0, -1.5]   # 对应区域：客厅茶几附近
-  kitchen: [2.5, -6.0]     # 对应区域：煤气看护
+  bedroom: [7.29, -5.54]
+  childroom: [7.88, -1.12]
+  livingroom: [4.19, -2.57]
+  kitchen: [1.19, -4.83]
+
 
 api_key: sk-02e28def7b114e3bb8de9b2dc377b608
 

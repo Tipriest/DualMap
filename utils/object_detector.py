@@ -771,7 +771,7 @@ class Detector:
 
         # Perform YOLO prediction(执行YOLO预测)
 
-        results = self.yolo.predict([color], conf=0.5, verbose=False)
+        results = self.yolo.predict([color], conf=0.25, verbose=False)
 
         # Extract confidence scores(提取置信度分数)
         confidence_tensor = results[0].boxes.conf
@@ -803,7 +803,7 @@ class Detector:
     def process_yolo_results_with_masks(self, color, obj_classes):
         """运行YOLO并返回bbox和已经resize到原图尺寸的mask。"""
         # Perform YOLO prediction(执行YOLO预测)
-        results = self.yolo.predict([color], conf=0.5, verbose=False)
+        results = self.yolo.predict([color], conf=0.25, verbose=False)
         # Extract confidence scores(提取置信度分数)
         confidence_tensor = results[0].boxes.conf
         confidence_np = confidence_tensor.cpu().numpy()
