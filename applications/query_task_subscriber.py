@@ -28,7 +28,8 @@ from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid, Odometry
 from sensor_msgs.msg import Image
 from action_msgs.msg import GoalStatus
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
+
 
 
 class TaskSubscriber(Node):
@@ -78,6 +79,10 @@ class TaskSubscriber(Node):
             self.remap_target_callback,
             10,
             callback_group=self._cbg,
+        )
+
+        self.bbox_write_finish_flag_pub = self.create_publisher(
+            Bool, '/bbox_config_ready', 10
         )
 
         # ====== Nav2 Action Client ======
@@ -370,6 +375,9 @@ class TaskSubscriber(Node):
         hazard_path = self.cfg["hazard_yaml_path"]
         if corners is not None:
             pop_hazard2yaml(hazard_path, corners)
+            msg = Bool()
+            msg.data = True
+            self.bbox_write_finish_flag_pub.publish(msg)
 
     # ====================== Worker：执行导航流程 ======================
 

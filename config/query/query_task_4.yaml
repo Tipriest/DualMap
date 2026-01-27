@@ -32,4 +32,4 @@ api_key: sk-02e28def7b114e3bb8de9b2dc377b608
 
 
 # 语义障碍物体定义文件，要修改成oe的位置
-hazard_yaml_path: ../keepout_bboxes.yaml
+hazard_yaml_path: /root/nav2_ws/src/nav2_costmap_filters_demo/params/keepout_bboxes.yaml
