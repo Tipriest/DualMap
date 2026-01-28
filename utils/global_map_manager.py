@@ -15,6 +15,12 @@ from utils.navigation_helper import LayoutMap, NavigationGraph
 from utils.object import GlobalObject
 from utils.time_utils import get_timestamped_path
 from utils.types import GoalMode, Observation
+import torch
+try:
+    import torch_npu
+except ModuleNotFoundError:
+    pass
+import torch.nn.functional as F
 
 # Set up the module-level logger
 logger = logging.getLogger(__name__)
@@ -963,6 +969,7 @@ class GlobalMapManager(BaseMapManager):
         qmax[:2] += expand[:2]
 
         out: List[GlobalObject] = []
+        print(f"[ROS][Search] GlobalObject original size {len(self.global_map)}")
         for obj in self.global_map:
             if obj.bbox_2d is None:
                 continue
@@ -972,7 +979,7 @@ class GlobalMapManager(BaseMapManager):
             # keep if center within bbox (XY)
             if (qmin[0] <= c[0] <= qmax[0]) and (qmin[1] <= c[1] <= qmax[1]):
                 out.append(obj)
-
+        print(f"[ROS][Search] GlobalObject after size {len(out)}")
         return out
 
     def search_similar_object_in_bbox(
@@ -992,23 +999,38 @@ class GlobalMapManager(BaseMapManager):
         if not candidates:
             return None, 0.0
 
-        q = self._to_numpy_feat(query_feat)
-
+        # q = self._to_numpy_feat(query_feat)
+        query_feat = query_feat.type(torch.float32)
         best_obj: Optional[GlobalObject] = None
         best_sim: float = -1.0
-
+        values = []
         for obj in candidates:
-            # base sim
-            sim = self._cos_sim(q, obj.clip_ft)
+            values.append(torch.from_numpy(obj.clip_ft))
+        map_clip_fts = torch.stack(values, dim=0).to(self.cfg.device)
+        map_clip_fts = map_clip_fts.type(torch.float32)
+        print(f"search_similar_object_in_bbox use device: {self.cfg.device}")
+        cos_sim = F.cosine_similarity(
+            query_feat.unsqueeze(0), map_clip_fts, dim=-1
+        )
+        sorted_cos_sim, sorted_idx = torch.sort(cos_sim, dim=0, descending=True)
 
-            # related sim
-            if getattr(obj, "related_objs", None):
-                for rel_ft in obj.related_objs:
-                    sim = max(sim, self._cos_sim(q, rel_ft))
+        for i in range(len(sorted_cos_sim)):
+            sim = sorted_cos_sim[i]
+            candidate = candidates[sorted_idx[i]]
+
+            # base sim
+            print(
+                f"[ROS][Search][cos_sim] MATCH: query: {sorted_idx[i]} -> class='{candidate.class_name}', uid={candidate.uid}, score={sim}, th={sim_threshold}, center={candidate.pose}"
+            )
+
+            # # related sim
+            # if getattr(obj, "related_objs", None):
+            #     for rel_ft in obj.related_objs:
+            #         sim = max(sim, self._cos_sim(q, rel_ft))
 
             if sim > best_sim:
                 best_sim = sim
-                best_obj = obj
+                best_obj = candidate
 
         if best_obj is None or best_sim < float(sim_threshold):
             return None, float(best_sim if best_sim >= 0 else 0.0)
