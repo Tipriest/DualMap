@@ -692,7 +692,7 @@ class Detector:
 
         # if detection is empty, return(如果检测为空，则返回)
         if len(confidence) == 0:
-            logger.warning("[Detector] 当前帧中未找到任何检测。")
+            # logger.warning("[Detector] 当前帧中未找到任何检测。")
             # 确保本帧不再使用上一帧的检测
             self.curr_detections = None
             # 将当前结果设置为空字典
@@ -736,7 +736,7 @@ class Detector:
 
         # if detection is empty, return(如果检测为空，则返回)
         if len(confidence) == 0:
-            logger.warning("[Detector] 当前帧中未找到任何检测。")
+            # logger.warning("[Detector] 当前帧中未找到任何检测。")
             # 确保本帧不再使用上一帧的检测
             self.curr_detections = None
             self.curr_results = {}
@@ -1015,9 +1015,9 @@ class Detector:
             or self.curr_detections is None
             or len(self.curr_detections) == 0
         ):
-            logger.warning(
-                "[Detector] YOLO+Segmentation 后没有有效检测结果，跳过本帧。"
-            )
+            # logger.warning(
+            #     "[Detector] YOLO+Segmentation 后没有有效检测结果，跳过本帧。"
+            # )
             self.curr_results = {}
             return
 
@@ -1855,7 +1855,7 @@ class Detector:
         """
         # 如果没有检测结果，直接返回
         if not self.curr_results:
-            logger.warning("[Detector] 没有检测结果，无法计算观测")
+            # logger.warning("[Detector] 没有检测结果，无法计算观测")
             self.curr_observations = []
             return
 

@@ -1239,7 +1239,10 @@ class TaskSubscriber(Node):
             )
             # LOG2：Recovery 找到物体记录 <<<
             if ok:
-                write_log(f"Object Found: {self.target_name} ")
+                write_log(f"-----------------Object Found: {self.target_name} ")
+                write_log(f"-----------------Object Found: {self.target_name} ")
+                write_log(f"-----------------Object Found: {self.target_name} ")
+                time.sleep(5.0)
         # while True:
         #     if self.target_x is not None and self.target_y is not None:
         #         break

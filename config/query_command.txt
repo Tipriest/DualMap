@@ -1,0 +1,33 @@
+--------------------------
+--------------------------
+----------query1----------
+进入主卧床头桌区域
+到达主卧床头桌区域
+进入主卧床头桌旁边
+到达主卧床头桌旁边、
+去卧室
+去厨房
+去照顾小孩子
+
+去卧室的床上找玩具
+去厨房找桌子上的锅
+去厨房找桌子上的玩具狗
+去儿童看护区域
+去找到儿童房地上的玩具狗
+python -m applications.query_task_2_3
+
+去卧室的床上找玩具狗
+去厨房找微波炉
+
+
+  bedroom: [3.60, -7.45, 10.68, -3.36]
+  childroom: [5.60, -3.50, 10.40, 1.88]
+  livingroom: [-1.80, -3.30, 5.60, 1.80]
+  kitchen: [-1.50, -7.20,  3.70, -3.36]
+
+
+python3 /home/tipriest/Documents/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name microwave --bbox "-1.50, -7.20,  3.70, -3.36" --score-th 0.35 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name microwave --bbox "-1.50, -7.20,  3.70, -3.36" --score-th 0.35 --timeout 30
