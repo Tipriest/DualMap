@@ -24,3 +24,4 @@ kernel_meta/
 fusion_result.json
 
 *.om
+*.onnx

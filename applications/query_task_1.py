@@ -118,9 +118,14 @@ class TaskSubscriber(Node):
         )
 
         print("Goal result: ", ok)
+        write_log(f"Goal result:  {ok}")
 
         if ok:
             write_log(f"Enter region! {region}")
+
+        ok = self._goto_point(0, 0, yaw = 0.0, frame_id="map", wait_timeout=5.0)
+        if ok:
+            write_log(f"Retuen to origin after entering region {region}")
 
     # ====================== Nav2 Action：异步 + Event 等待 ======================
 
