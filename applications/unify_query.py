@@ -45,6 +45,7 @@ if PROJECT_ROOT not in sys.path:
 
 from utils.object import BaseObject
 
+
 STATUS_NAME = {
     GoalStatus.STATUS_UNKNOWN: "UNKNOWN",
     GoalStatus.STATUS_ACCEPTED: "ACCEPTED",

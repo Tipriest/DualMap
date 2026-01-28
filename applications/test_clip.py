@@ -115,6 +115,6 @@ class TestClip:
 
 tester = TestClip(
     # load_dir="/home/tang123/DualMap/output/map_on_oe/20260120_054551/global_map"
-    load_dir=os.path.join(PROJECT_ROOT, "output/20260120_054551/global_map")
+    load_dir=os.path.join(PROJECT_ROOT, "output/map_results/hm3d_00829-QaLdnwvtxbs/20260127_194233/global_map")
 )
-result = tester.query_callback("laptop")
+result = tester.query_callback("bed")

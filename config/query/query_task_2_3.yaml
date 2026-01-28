@@ -6,9 +6,9 @@ defaults:
 
 
 # 应该是第一天建好的图的global map的位置
-load_dir: /data/test/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/20260127_163042/global_map
+load_dir: /data/test/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/20260127_194233/global_map
 
-clip_dir: ../../model/ViT-B-32.pt
+clip_dir: /data/test/DualMap/model/ViT-B-32.pt
 
 # 房间边界定义 [min_x, max_x, min_y, max_y]
 # NOTE: 要检查，调整成真实尺寸，现在的数值是初步估计的

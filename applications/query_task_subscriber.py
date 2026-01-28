@@ -11,12 +11,12 @@ import threading
 import json
 import requests
 from typing import Optional, Tuple
-
+import os
 import numpy as np
 import open_clip
 import torch
 import torch.nn.functional as F
-
+import datetime
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
@@ -30,7 +30,9 @@ from sensor_msgs.msg import Image
 from action_msgs.msg import GoalStatus
 from std_msgs.msg import String, Bool
 
+from utils.object import BaseObject
 
+LOG_FILE = "nav_result.txt"
 
 class TaskSubscriber(Node):
     def __init__(self, cfg_path: str):
