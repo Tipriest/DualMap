@@ -110,7 +110,7 @@ class RunnerROS2(Node, RunnerROSBase):
         )
         self.search_rate_hz = float(getattr(cfg, "search_rate_hz", 1.0))
         self.search_sim_threshold = float(
-            getattr(cfg, "search_sim_threshold", 0.30)
+            getattr(cfg, "search_sim_threshold", 0.50)
         )
 
         self._search_req_sub = self.create_subscription(

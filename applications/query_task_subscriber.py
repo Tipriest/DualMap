@@ -611,9 +611,9 @@ class TaskSubscriber(Node):
                         )
 
                         self.run_recovery()
-                        self.request_exit(
-                            "Recovery finished after task incomplete! "
-                        )
+                        # self.request_exit(
+                        #     "Recovery finished after task incomplete! "
+                        # )
                     else:
                         self.request_exit("task complete")
 
@@ -646,7 +646,7 @@ class TaskSubscriber(Node):
             cx + width / 2,
             cy + height / 2,
         ]
-        score_th = 0.45
+        score_th = 0.50
 
         msg.data = self._build_request_json(
             self.target_name, bbox, score_th, continuous=False
@@ -783,7 +783,7 @@ class TaskSubscriber(Node):
         send_future = self._client.send_goal_async(goal_msg)
         send_future.add_done_callback(_on_goal_response)
 
-        nav_timeout = 300.0
+        nav_timeout = 50.0
         ok = done_evt.wait(timeout=nav_timeout)
         if not ok:
             self.get_logger().error(f"Navigation timeout after {nav_timeout}s.")
@@ -1113,7 +1113,7 @@ class TaskSubscriber(Node):
             room = self._sanitize_filename(getattr(self, "room", "None"))
 
             filename = f"{prefix}_{ts}_{ms:03d}_room-{room}_tgt-{tgt}.jpg"
-            save_path = os.path.join("/data/DualMap/applications", filename)
+            save_path = os.path.join("/data/test/DualMap/applications", filename)
 
             # 直接写 BGR 即可
             ok = cv2.imwrite(save_path, cv_image)

@@ -29,7 +29,7 @@ sys.path.append(os.path.join(PROJECT_ROOT, "applications/utils"))
 
 from applications.query_task_subscriber import TaskSubscriber, write_log
 
-LOG_FILE = "nav_result_task4.txt"
+LOG_FILE = "nav_result_task.txt"
 
 
 def parse_command_with_qwen(cfg_path: str, user_query: str):

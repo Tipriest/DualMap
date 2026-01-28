@@ -95,11 +95,11 @@ class TaskSubscriber(Node):
         self.room_anchors = {}
         if "room_anchors" in self.cfg:
             self.room_anchors = self.cfg["room_anchors"]
-            self.get_logger().info(
+            write_log(
                 f"Loaded room anchors from config: {list(self.room_anchors.keys())}"
             )
 
-        self.get_logger().info(
+        write_log(
             "TaskSubscriber initialized. Waiting for topics..."
         )
 
@@ -136,12 +136,19 @@ class TaskSubscriber(Node):
         发送 NavigateToPose 并等待 result（在 worker 线程里 wait，不阻塞 ROS 回调线程）。
         FLAG: 不再做任何提前截断/cancel逻辑，完全交给 Nav2 自己的容忍度。
         """
+        # ====== 1. 等待 Nav2 Action Server ======
+        write_log(
+            f"[goto_point] Waiting for action server '{self._action_name}' "
+            f"(timeout={wait_timeout:.1f}s)..."
+        )
         if not self._client.wait_for_server(timeout_sec=wait_timeout):
             self.get_logger().error(
                 f"NavigateToPose server not available: '{self._action_name}' (waited {wait_timeout}s)"
             )
             return False
+        write_log("[goto_point] Action server is available.")
 
+        # ====== 2. 构造 Goal 消息 ======
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose = PoseStamped()
         goal_msg.pose.header.frame_id = frame_id
@@ -154,32 +161,57 @@ class TaskSubscriber(Node):
         goal_msg.pose.pose.orientation.z = qz
         goal_msg.pose.pose.orientation.w = qw
 
-        self.get_logger().info(
-            f"Send goal: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f} ({frame_id})"
-        )
+        write_log(
+        f"[goto_point] Send goal: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f} "
+        f"({frame_id}), q=({qx:.3f},{qy:.3f},{qz:.3f},{qw:.3f})"
+    )
 
         done_evt = threading.Event()
         result_holder = {"status": None, "accepted": None}
 
         def _on_goal_response(fut):
+            print("[goto_point] _on_goal_response() called.")
+            write_log("[goto_point] _on_goal_response() called.")
             try:
                 gh = fut.result()
-                if gh is None or (not gh.accepted):
+                if gh is None:
+                    self.get_logger().error(
+                        "[goto_point] GoalHandle is None. Goal probably failed to send."
+                    )
+                    result_holder["accepted"] = False
+                    done_evt.set()
+                    return
+
+                if not gh.accepted:
+                    self.get_logger().warn(
+                        "[goto_point] Goal was REJECTED by the action server."
+                    )
                     result_holder["accepted"] = False
                     done_evt.set()
                     return
 
                 result_holder["accepted"] = True
-                self.get_logger().info("Goal accepted. Waiting result...")
-
+                write_log(
+                "[goto_point] Goal accepted by server. Waiting for result..."
+            )
+                # ====== 5. 结果回调（导航结束） ======
                 rfut = gh.get_result_async()
 
                 def _on_result(rf):
+                    write_log("[goto_point] _on_result() called.")
                     try:
                         res = rf.result()
-                        result_holder["status"] = (
-                            None if res is None else int(res.status)
-                        )
+                        if res is None:
+                            self.get_logger().error(
+                                "[goto_point] Result is None. "
+                                "No status returned from NavigateToPose."
+                            )
+                            result_holder["status"] = None
+                        else:
+                            result_holder["status"] = int(res.status)
+                            write_log("[goto_point] Result received. "
+                                f"status={res.status} "
+                                f"({STATUS_NAME.get(res.status, 'UNKNOWN')})")
                     finally:
                         done_evt.set()
 
@@ -190,26 +222,38 @@ class TaskSubscriber(Node):
                 result_holder["accepted"] = False
                 done_evt.set()
 
+        # ====== 6. 发送 goal（异步） ======
+        write_log("[goto_point] Sending goal asynchronously...")
         send_future = self._client.send_goal_async(goal_msg)
         send_future.add_done_callback(_on_goal_response)
 
-        nav_timeout = 300.0
+        nav_timeout = 35.0
+        write_log(f"[goto_point] Waiting for navigation to finish (timeout={nav_timeout:.1f}s)...")
         ok = done_evt.wait(timeout=nav_timeout)
         if not ok:
-            self.get_logger().error(f"Navigation timeout after {nav_timeout}s.")
+            self.get_logger().error(
+            f"[goto_point] Navigation timeout after {nav_timeout}s. "
+            "No result callback triggered."
+        )
             return False
 
         if result_holder["accepted"] is not True:
-            self.get_logger().error("Goal rejected / no goal_handle.")
+            # 这里可能是：server 拒绝、发送失败、回调异常等
+            self.get_logger().error(
+                "[goto_point] Goal rejected / no valid GoalHandle. "
+                f"accepted={result_holder['accepted']}, "
+            )
             return False
 
         status = result_holder["status"]
         if status == GoalStatus.STATUS_SUCCEEDED:
-            self.get_logger().info("Navigation SUCCEEDED.")
+            write_log("[goto_point] Navigation SUCCEEDED.")
             return True
 
         self.get_logger().warn(
-            f"Navigation finished with status={status} ({STATUS_NAME.get(status, '???')})"
+            "[goto_point] Navigation finished with non-success status: "
+            f"status={status} ({STATUS_NAME.get(status, 'UNKNOWN')}). "
+            f"exception={result_holder['exception']}"
         )
         return False
 
@@ -296,7 +340,14 @@ def parse_command_with_qwen(cfg_path: str, user_query: str):
 def main():
     # 从配置读取
     cfg_path = os.path.join(PROJECT_ROOT, "config/query/query_task_1.yaml")
-    # cfg_path = "/home/tang123/Documents/DualMap/config/query/query_task_1.yaml"
+    # cfg_path = "/home/tang123/Documents/DualMap/config/query/query_task_1.yaml
+
+    # 初始化ROS和Node
+    rclpy.init()
+    node = TaskSubscriber(cfg_path)
+
+    # 等待初始化
+    time.sleep(1)
 
     # 读取指令
     query_text = input("请输入指令：")
@@ -306,13 +357,6 @@ def main():
     print("***********************************************")
     print(f"Goal Region: {region_result}")
     print("***********************************************")
-
-    # 初始化ROS和Node
-    rclpy.init()
-    node = TaskSubscriber(cfg_path)
-
-    # 等待初始化
-    time.sleep(1)
 
     node._region_cb(region_result)
 
