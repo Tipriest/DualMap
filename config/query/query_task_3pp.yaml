@@ -5,7 +5,7 @@ defaults:
   - _self_
 
 # 地图和模型路径
-load_dir: /data/test/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/20260129_075903/global_map
+load_dir: /data/test/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/20260129_110246_simplify/global_map
 clip_dir: /data/test/DualMap/model/ViT-B-32.pt
 
 # 房间边界定义 [min_x, max_x, min_y, max_y]
@@ -17,10 +17,10 @@ room_edges:
 
 # 房间锚点定义 [x, y] - 用于导航到房间的开阔位置
 room_anchors:
-  bedroom: [7.29, -5.54]
-  childroom: [8.0, -1.12]
-  livingroom: [3.59, -2.57]
-  kitchen: [1.19, -4.83]
+  bedroom: [8.00, -4.36]
+  childroom: [8.87, -1.29]
+  livingroom: [3.40, -2.50]
+  kitchen: [0.58, -5.32]
 
 # API 密钥
 api_key: sk-02e28def7b114e3bb8de9b2dc377b608

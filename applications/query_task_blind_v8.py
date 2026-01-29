@@ -62,38 +62,22 @@ def parse_command_with_qwen(cfg_path: str, user_query: str):
 提取和推理：
 1. **目标物品** (target_object): 需要寻找的物品（必须存在）
 2. **目标房间** (target_room): 如果用户明确指定了房间则提取，否则返回 "None"
-3. **相关物品** (related_object): 如果用户指定了位置关系（如"桌子上的杯子"），提取相关物品，否则返回 "None"
-4. **房间优先级** (room_priority): 根据物品类型，推理最可能出现的房间顺序
+3. **房间优先级** (room_priority): 根据物品类型，推理最可能出现的房间顺序
 
 房间只有4个：livingroom(客厅), bedroom(卧室), childroom(儿童房), kitchen(厨房)
 
 要求：
 - target_object 必须存在，不能为空
 - target_room 只可能是 livingroom, bedroom, childroom, kitchen 之一，或 "None"
-  **重要**: "床上"、"桌上"、"柜子里"等位置描述不是房间，必须返回 "None"
-- related_object 可能是任何物品或 "None"
 - room_priority 必须是包含所有4个房间的数组，按可能性从高到低排序
-- 物品名称必须从以下列表中选择对应的英文单词：
-  * 背包→backpack, 相框→picture frame, 篮球→basketball, 碗→bowl
-  * 香蕉→banana, 苹果→apple, 木马/玩具马→toy horse, 椅子→chair
-  * 沙发→couch, 绿植/植物→green plant, 床→bed, 桌子→table
-  * 电视→tv, 笔记本电脑→laptop, 微波炉→microwave, 柜子→cabinet
-  * 毛绒玩具/玩偶→soft toy, 地毯→carpet, 台灯→table lamp
-  * 床头柜→nightstand, 帐篷→tent, 积木→building blocks
-  * 书架→bookshelf, 燃气灶→gas stove, 锅→pot, 水壶→kettle
-  * 菜篮/食物篮→food basket, 水龙头→faucet
+- 物品名称需要是英文的类型，如"杯子"返回"cup"
 - 如果没有指定房间，客厅(livingroom)必须排在第一位
 - 只返回 JSON 格式，不要其他文本
-
-示例：
-"床上的木马" → {{"target_object": "toy horse", "target_room": "None", "related_object": "bed", "room_priority": ["bedroom", "childroom", "livingroom", "kitchen"]}}
-"找篮球" → {{"target_object": "basketball", "target_room": "None", "related_object": "None", "room_priority": ["livingroom", "childroom", "bedroom", "kitchen"]}}
 
 输出格式：
 {{
     "target_object": "物品英文名称",
     "target_room": "房间名称或None",
-    "related_object": "相关物品英文名称或None",
     "room_priority": ["livingroom", "kitchen", "bedroom", "childroom"]
 }}
 
@@ -165,8 +149,7 @@ def parse_command_with_qwen(cfg_path: str, user_query: str):
 
 class Task3PPSubscriber(TaskSubscriber):
     """
-    继承 TaskSubscriber，专门处理没有房间指定的搜索任务
-    Task3++ 只用于无房间的情况，有房间应该用 query_task_2_3_v2.py
+    继承 TaskSubscriber，重写 _task_worker 实现遍历房间逻辑
     """
 
     def __init__(self, cfg_path: str):
@@ -178,6 +161,7 @@ class Task3PPSubscriber(TaskSubscriber):
         self.rooms_to_visit = []  # 待访问的房间列表
         self.searched_rooms = []  # 已搜索的房间列表
         self.room_priority = []  # LLM 推理的房间优先级
+        self.user_specified_room = False  # 用户是否指定了房间
 
         # 重写 worker
         self._worker = None  # 停止父类的 worker
@@ -186,12 +170,7 @@ class Task3PPSubscriber(TaskSubscriber):
 
     def _task_worker_3pp(self):
         """
-        Task 3++ 的主工作流程：专门处理没有房间的情况
-
-        场景判断：
-        1. 有房间指定：不应该用这个脚本，应该用 query_task_2_3_v2.py
-        2. 无房间 + 有related：遍历房间，在每个房间内找related和target，验证包含关系
-        3. 无房间 + 无related：遍历房间，直接搜索target
+        Task 3++ 的主工作流程：遍历房间寻找目标
         """
         while not self._shutdown_event.is_set():
             self._task_event.wait(timeout=0.2)
@@ -203,7 +182,6 @@ class Task3PPSubscriber(TaskSubscriber):
             with self._lock:
                 target_name = self.target_name
                 room = self.room
-                related_name = getattr(self, 'related_object_name', 'None')
 
             self._task_event.clear()
 
@@ -212,48 +190,114 @@ class Task3PPSubscriber(TaskSubscriber):
                 continue
 
             try:
-                # ========== 重置状态 ==========
+                # ========== 重置状态（每次任务开始前清空） ==========
                 self.target_found = False
                 self.searched_rooms = []
+                # 重要：清空上次任务的目标位置，避免误判
                 with self._lock:
                     self.target_x = None
                     self.target_y = None
 
-                # ========== 场景判断 ==========
-                has_room = room and room != "None"
-                has_related = related_name and related_name != "None"
+                # ========== 确定要访问的房间列表（三种模式） ==========
+                # 模式1: 用户明确指定房间（如"去卧室找杯子"）
+                if room and room != "None":
+                    self.rooms_to_visit = [room]
+                    self.user_specified_room = True
+                    self.get_logger().info(f"[模式1] 用户指定房间: {room}，只搜索该房间")
+                # 模式2: LLM 推理房间优先级（如"找杯子"→推理为客厅、厨房、卧室...）
+                elif self.room_priority and len(self.room_priority) > 0:
+                    self.rooms_to_visit = self.room_priority
+                    self.user_specified_room = False
+                    self.get_logger().info(f"[模式2] 使用 LLM 推理的房间顺序: {self.room_priority}")
+                # 模式3: 默认顺序（兜底逻辑）
+                else:
+                    self.rooms_to_visit = ["livingroom", "bedroom", "childroom", "kitchen"]
+                    self.user_specified_room = False
+                    self.get_logger().info("[模式3] 使用默认房间顺序（客厅优先）")
 
-                # 场景1: 有房间指定 - 错误使用，应该用 query_task_2_3_v2.py
-                if has_room:
-                    self.get_logger().error("=" * 60)
-                    self.get_logger().error("❌ 错误：指定了房间应该使用 query_task_2_3_v2.py")
-                    self.get_logger().error("   Task3++ 只用于没有房间指定的情况")
-                    self.get_logger().error("=" * 60)
-                    write_log("错误：有房间应该使用 query_task_2_3_v2.py")
-                    self._return_home_and_exit("Wrong script: use query_task_2_3_v2.py for room-specific search")
-                    continue
+                write_log(f"开始遍历房间寻找 {target_name}，顺序: {self.rooms_to_visit}")
 
-                # 场景2: 无房间 + 有related
-                if has_related:
-                    self.get_logger().info("=" * 60)
-                    self.get_logger().info("📍 场景: 无房间+有related")
-                    self.get_logger().info(f"  策略: 遍历房间 → 找related → 验证包含关系 → 找target")
-                    self.get_logger().info("=" * 60)
-                    self._handle_no_room_with_related(target_name, related_name)
-                    continue
+                # ========== 遍历每个房间进行搜索 ==========
+                for room_name in self.rooms_to_visit:
+                    # 检查1: 如果已找到目标，立即停止遍历
+                    if self.target_found:
+                        self.get_logger().info("✓ 目标已找到，停止遍历后续房间")
+                        break
 
-                # 场景3: 无房间 + 无related
-                self.get_logger().info("=" * 60)
-                self.get_logger().info("📍 场景: 无房间+无related")
-                self.get_logger().info(f"  策略: 遍历房间 → 直接找target → 转圈搜索")
-                self.get_logger().info("=" * 60)
-                self._handle_no_room_no_related(target_name)
+                    self.get_logger().info(f"===== 开始访问房间: {room_name} =====")
+                    self.searched_rooms.append(room_name)  # 维护已搜索房间列表
+
+                    # 步骤1: 设置当前房间（更新父类的 self.room 和相关状态）
+                    self._room_cb(room_name)
+                    time.sleep(0.3)  # 等待房间边界信息就绪
+
+                    # 步骤2: 获取房间锚点（预设的房间观察位置）
+                    anchor_pt = self.room_anchors.get(room_name, None)
+                    if anchor_pt is None:
+                        self.get_logger().warn(f"⚠ 房间 {room_name} 没有锚点配置，跳过")
+                        continue
+
+                    anchor_x, anchor_y = anchor_pt
+
+                    # 步骤3: 发布房间 bbox 给 dualmap 进行目标检索
+                    # dualmap 会在该房间范围内搜索目标物体
+                    self._publish_room_bbox_for_search(room_name)
+
+                    # 步骤4: 导航到房间锚点（可中断导航）
+                    # 如果在导航过程中收到 dualmap 响应，会设置 target_found=True
+                    self.get_logger().info(f"→ 导航到 {room_name} 锚点: ({anchor_x:.2f}, {anchor_y:.2f})")
+                    ok = self._goto_point_interruptible(
+                        anchor_x, anchor_y, yaw=0.0, frame_id="map", wait_timeout=5.0
+                    )
+
+                    # 检查2: 导航过程中是否收到目标位置
+                    if self.target_found:
+                        self.get_logger().info("✓ 导航过程中收到目标位置，中断后续流程")
+                        break
+
+                    if not ok:
+                        self.get_logger().warn(f"✗ 导航到 {room_name} 失败，继续下一个房间")
+                        continue
+
+                    # 步骤5: 到达后连续旋转360度（不停留，快速扫描）
+                    # 旋转过程中 dualmap 持续检索，增加发现目标的概率
+                    self.get_logger().info(f"↻ 到达 {room_name}，开始360度旋转扫描")
+                    self._spin_360_continuous()
+                    self.get_logger().info(f"↻ 到达 {room_name}，开始360度旋转扫描")
+                    self._spin_360_continuous()
+                    self.get_logger().info(f"↻ 到达 {room_name}，开始360度旋转扫描")
+                    self._spin_360_continuous()
+                    # 检查3: 旋转过程中是否找到目标
+                    if self.target_found:
+                        self.get_logger().info("✓ 旋转过程中目标已找到")
+                        break
+
+                    # 步骤6: 旋转完成后等待 dualmap 最终响应
+                    # 给 dualmap 一点时间完成检索并返回结果
+                    time.sleep(0.5)
+                    with self._lock:
+                        if self.target_x is not None and self.target_y is not None:
+                            self.target_found = True
+                            self.get_logger().info("✓ 收到 dualmap 最终响应，目标已找到")
+                            break
+
+                # ========== 任务结果处理 ==========
+                if self.target_found:
+                    # 情况A: 找到目标 → 导航到目标 → 返回起点
+                    self._handle_target_found()
+                else:
+                    # 情况B: 未找到目标 → 根据模式决定处理方式
+                    if self.user_specified_room:
+                        # 模式1: 用户指定房间但未找到 → 直接返回起点报FAIL
+                        self._handle_specified_room_not_found()
+                    else:
+                        # 模式2/3: 遍历所有房间都未找到 → 返回起点报FAIL
+                        self._handle_all_rooms_not_found()
 
             except Exception as e:
-                self.get_logger().error(f"Worker exception: {type(e).__name__}('{e}')")
+                self.get_logger().error(f"Worker exception: {repr(e)}")
                 import traceback
                 traceback.print_exc()
-                self._return_home_and_exit(f"Exception: {e}")
 
     def _publish_room_bbox_for_search(self, room_name: str):
         """
@@ -413,39 +457,6 @@ class Task3PPSubscriber(TaskSubscriber):
             finally:
                 self.current_goal_handle = None
 
-    def _spin_360_continuous(self):
-        """
-        连续旋转360度扫描房间，不等待每个角度完成
-
-        实现策略:
-        - 每45度发送一次旋转指令（8个方向）
-        - 不等待每个旋转完成，快速连续发送
-        - 在旋转过程中持续检查 target_found 和 target_x/target_y
-        - 一旦发现目标立即停止旋转
-
-        为什么这样设计:
-        1. 快速扫描：不等待完成可以更快覆盖360度
-        2. 实时响应：dualmap 在任意角度都可能返回结果
-        3. 提高效率：找到目标后立即停止，不浪费时间
-        """
-        yaw_increments = [math.pi / 4 * i for i in range(8)]  # 0, 45, 90, ..., 315度
-        cx, cy = self.current_x, self.current_y
-
-        for yaw in yaw_increments:
-            if self.target_found:
-                self.get_logger().info("旋转过程中目标已找到，停止旋转")
-                break
-
-            # 不等待导航完成，直接发送下一个角度
-            self._goto_point(cx, cy, yaw=yaw, frame_id="map", wait_timeout=5.0)
-
-            # 检查是否收到目标
-            with self._lock:
-                if self.target_x is not None and self.target_y is not None:
-                    self.target_found = True
-                    self.get_logger().info("旋转中收到目标位置")
-                    break
-
     def _goto_point_with_early_stop(
         self, target_x: float, target_y: float, yaw: float,
         frame_id: str, wait_timeout: float, stop_distance: float = 0.5
@@ -552,16 +563,38 @@ class Task3PPSubscriber(TaskSubscriber):
 
         return False
 
-    def _cancel_current_goal(self):
-        """取消当前的导航目标"""
-        if self.current_goal_handle is not None:
-            try:
-                self.get_logger().info("取消当前导航目标")
-                cancel_future = self.current_goal_handle.cancel_goal_async()
-            except Exception as e:
-                self.get_logger().error(f"取消导航失败: {repr(e)}")
-            finally:
-                self.current_goal_handle = None
+    def _spin_360_continuous(self):
+        """
+        连续旋转360度扫描房间，不等待每个角度完成
+
+        实现策略:
+        - 每45度发送一次旋转指令（8个方向）
+        - 不等待每个旋转完成，快速连续发送
+        - 在旋转过程中持续检查 target_found 和 target_x/target_y
+        - 一旦发现目标立即停止旋转
+
+        为什么这样设计:
+        1. 快速扫描：不等待完成可以更快覆盖360度
+        2. 实时响应：dualmap 在任意角度都可能返回结果
+        3. 提高效率：找到目标后立即停止，不浪费时间
+        """
+        yaw_increments = [math.pi / 4 * i for i in range(8)]  # 0, 45, 90, ..., 315度
+        cx, cy = self.current_x, self.current_y
+
+        for yaw in yaw_increments:
+            if self.target_found:
+                self.get_logger().info("旋转过程中目标已找到，停止旋转")
+                break
+
+            # 不等待导航完成，直接发送下一个角度
+            self._goto_point(cx, cy, yaw=yaw, frame_id="map", wait_timeout=5.0)
+
+            # 检查是否收到目标
+            with self._lock:
+                if self.target_x is not None and self.target_y is not None:
+                    self.target_found = True
+                    self.get_logger().info("旋转中收到目标位置")
+                    break
 
     def _handle_target_found(self):
         """
@@ -575,11 +608,10 @@ class Task3PPSubscriber(TaskSubscriber):
             self.get_logger().error("目标位置为空")
             return
 
-        self.get_logger().info(f"✓ dualmap返回目标位置: ({target_x:.2f}, {target_y:.2f})")
-        self.get_logger().info(f"→ 导航到'{self.target_name}'... ⏹提前0.5m停止")
+        self.get_logger().info(f"导航到目标: ({target_x:.2f}, {target_y:.2f}) ⏹提前0.5m停止")
         write_log(f"目标找到: {self.target_name} at ({target_x:.2f}, {target_y:.2f})")
 
-        # 计算可达点（距离1.5m避免太近）
+        # 计算最近可达点
         free_x, free_y = self.find_optimal_free_point_by_room_center(
             target_x, target_y, 1.5
         )
@@ -595,6 +627,18 @@ class Task3PPSubscriber(TaskSubscriber):
             frame_id="map", wait_timeout=5.0, stop_distance=0.5
         )
 
+        # FIXME: 这个地方不能再使用VLM进行check
+        # if nav_ok:
+        #     # RGB check 验证
+        #     is_complete = self.check_task()
+        #     if is_complete:
+        #         write_log(f"任务完成: {self.target_name}")
+        #         self.get_logger().info("任务验证成功")
+        #     else:
+        #         write_log(f"任务验证失败: {self.target_name}")
+        #         self.get_logger().warn("RGB check 失败，进入 recovery")
+        #         self.run_recovery()
+        # else:
         if not nav_ok:
             dx = self.target_x - self.current_x
             dy = self.target_y - self.current_y
@@ -618,10 +662,8 @@ class Task3PPSubscriber(TaskSubscriber):
 
         # dualmap已通过在线检测找到目标，现在到达位置后拍照确认
         self.get_logger().info(f"✓ 到达目标位置，拍照确认...")
-
         # 等待图像更新
         time.sleep(0.5)
-
         # 拍照保存
         if self.latest_image is not None:
             import cv2
@@ -636,17 +678,22 @@ class Task3PPSubscriber(TaskSubscriber):
         # 停留5秒
         self.get_logger().info("⏸️  停留5秒...")
         time.sleep(5.0)
-
         self._return_home_and_exit("Task completed successfully")
+
+        # # 返回原点
+        # self.get_logger().info("返回原点")
+        # self._goto_point(0.0, 0.0, yaw=0.0, frame_id="map", wait_timeout=5.0)
+
+        # self.request_exit("任务完成")
 
     def _return_home_and_exit(self, reason: str):
         """
         返回起点并退出任务
         """
         self.get_logger().info("===== 返回起点 =====")
-        write_log("返回起点 (0, -0.3)")
+        write_log("返回起点 (-0.8, -0.8)")
 
-        return_ok = self._goto_point(0.0, -0.3, yaw=0.0, frame_id="map", wait_timeout=5.0)
+        return_ok = self._goto_point(-0.8, -0.8, yaw=0.0, frame_id="map", wait_timeout=5.0)
 
         if return_ok:
             self.get_logger().info("✓ 成功返回起点")
@@ -658,217 +705,39 @@ class Task3PPSubscriber(TaskSubscriber):
         time.sleep(0.5)
         self.request_exit(reason)
 
-    def _handle_no_room_with_related(self, target_name: str, related_name: str):
+
+    def _handle_specified_room_not_found(self):
         """
-        场景2: 无房间 + 有related
-        遍历房间，在每个房间内找related和target，验证包含关系
+        处理用户指定房间但未找到目标的情况
+
+        触发条件:
+        - 用户明确指定了房间（如"去卧室找杯子"）
+        - 在该房间搜索完成后未找到目标
+
+        处理流程:
+        1. 记录失败日志（指定房间未找到）
+        2. 直接返回起点（不再搜索其他房间）
+        3. 打印醒目的失败信息
+        4. 调用 request_exit 结束任务（状态：FAIL）
+
+        设计理由:
+        - 用户明确指定了房间，说明有特定意图
+        - 不应该擅自搜索其他房间（可能不符合用户期望）
+        - 快速失败，让用户知道结果并重新决策
         """
-        # 确定房间顺序
-        if self.room_priority and len(self.room_priority) > 0:
-            self.rooms_to_visit = self.room_priority
-            self.get_logger().info(f"使用 LLM 推理的房间顺序: {self.room_priority}")
-        else:
-            self.rooms_to_visit = ["livingroom", "bedroom", "childroom", "kitchen"]
-            self.get_logger().info("使用默认房间顺序")
+        room_name = self.searched_rooms[0] if self.searched_rooms else "指定房间"
+        self.get_logger().warn(f"在 {room_name} 中未找到目标 {self.target_name}")
+        write_log(f"任务失败: 在 {room_name} 中未找到 {self.target_name}")
 
-        write_log(f"开始遍历房间寻找 related={related_name}, target={target_name}")
+        # 返回原点
+        self.get_logger().info("返回原点")
+        self._goto_point(0.0, 0.0, yaw=0.0, frame_id="map", wait_timeout=5.0)
 
-        import numpy as np
+        print(f"\n{'='*50}")
+        print(f"任务失败: 在 {room_name} 中未找到 {self.target_name}")
+        print(f"{'='*50}\n")
 
-        for room_name in self.rooms_to_visit:
-            if self.target_found:
-                break
-
-            self.get_logger().info(f"===== 搜索房间: {room_name} =====")
-            self.searched_rooms.append(room_name)
-
-            self._room_cb(room_name)
-            time.sleep(0.3)
-
-            # 在房间内查找related物体
-            rcorners = self.query_callback(related_name)
-
-            if rcorners is None:
-                self.get_logger().warn(f"⚠️  在'{room_name}'内未找到'{related_name}'")
-                continue
-
-            # 计算related物体位置
-            rpos = np.array(rcorners).mean(axis=0)
-            rx, ry = float(rpos[0]), float(rpos[1])
-            delta_rx = rcorners[1][0] - rcorners[0][0]
-            delta_ry = rcorners[2][1] - rcorners[1][1]
-
-            self.get_logger().info(f"✓ 在'{room_name}'中找到'{related_name}': ({rx:.2f}, {ry:.2f})")
-
-            # 导航到related位置
-            free_rx, free_ry = self.find_optimal_free_point_by_room_center(rx, ry, 1.2)
-            self.get_logger().info(f"→ 导航到'{related_name}'附近: ({free_rx:.2f}, {free_ry:.2f})")
-            nav_ok = self._goto_and_face_target(free_rx, free_ry, rx, ry)
-
-            if not nav_ok:
-                self.get_logger().warn(f"⚠️  导航到'{related_name}'失败")
-                continue
-
-            # 在related附近搜索target
-            self.get_logger().info(f"→ 在'{related_name}'附近搜索'{target_name}'")
-            self.publish_related_bbox(rx, ry, delta_rx, delta_ry, target_name)
-
-            # 转圈搜索target（3圈）
-            target_found = self._spin_and_wait_for_target(3)
-
-            if target_found:
-                # 验证target和related的包含关系
-                with self._lock:
-                    target_x = self.target_x
-                    target_y = self.target_y
-
-                if self._check_bbox_containment(target_x, target_y, rcorners):
-                    self.get_logger().info(f"✓ 验证通过：'{target_name}'在'{related_name}'内")
-                    self.target_found = True
-                    break
-                else:
-                    self.get_logger().warn(f"✗ 验证失败：'{target_name}'不在'{related_name}'内，继续搜索")
-                    # 清空target位置，继续搜索下一个房间
-                    with self._lock:
-                        self.target_x = None
-                        self.target_y = None
-
-        if self.target_found:
-            self._handle_target_found()
-        else:
-            self._handle_all_rooms_not_found()
-
-    def _handle_no_room_no_related(self, target_name: str):
-        """
-        场景3: 无房间 + 无related
-        遍历房间，直接搜索target，转圈3圈
-        """
-        # 确定房间顺序
-        if self.room_priority and len(self.room_priority) > 0:
-            self.rooms_to_visit = self.room_priority
-            self.get_logger().info(f"使用 LLM 推理的房间顺序: {self.room_priority}")
-        else:
-            self.rooms_to_visit = ["livingroom", "bedroom", "childroom", "kitchen"]
-            self.get_logger().info("使用默认房间顺序")
-
-        write_log(f"开始遍历房间寻找 {target_name}")
-
-        for room_name in self.rooms_to_visit:
-            if self.target_found:
-                break
-
-            self.get_logger().info(f"===== 搜索房间: {room_name} =====")
-            self.searched_rooms.append(room_name)
-
-            self._room_cb(room_name)
-            time.sleep(0.3)
-
-            anchor_pt = self.room_anchors.get(room_name, None)
-            if anchor_pt is None:
-                self.get_logger().warn(f"⚠ 房间 {room_name} 没有锚点配置")
-                continue
-
-            anchor_x, anchor_y = anchor_pt
-
-            # 发布房间bbox给dualmap
-            self._publish_room_bbox_for_search(room_name)
-
-            # 导航到房间锚点
-            self.get_logger().info(f"→ 导航到 {room_name} 锚点: ({anchor_x:.2f}, {anchor_y:.2f})")
-            ok = self._goto_point_interruptible(
-                anchor_x, anchor_y, yaw=0.0, frame_id="map", wait_timeout=5.0
-            )
-
-            if self.target_found:
-                break
-
-            if not ok:
-                self.get_logger().warn(f"✗ 导航到 {room_name} 失败")
-                continue
-
-            # 到达后旋转3圈搜索
-            self.get_logger().info(f"↻ 到达 {room_name}，开始旋转搜索（3圈）")
-            target_found = self._spin_and_wait_for_target(3)
-
-            if target_found:
-                self.target_found = True
-                break
-
-            time.sleep(0.5)
-            with self._lock:
-                if self.target_x is not None and self.target_y is not None:
-                    self.target_found = True
-                    break
-
-        if self.target_found:
-            self._handle_target_found()
-        else:
-            self._handle_all_rooms_not_found()
-
-    def _check_bbox_containment(self, point_x: float, point_y: float, bbox_corners) -> bool:
-        """
-        检查点是否在bbox内（包含关系验证）
-
-        Args:
-            point_x, point_y: 目标物体的中心点
-            bbox_corners: related物体的四个角点 [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-
-        Returns:
-            bool: True=在bbox内, False=不在bbox内
-        """
-        import numpy as np
-
-        # 计算bbox的边界
-        xs = [c[0] for c in bbox_corners]
-        ys = [c[1] for c in bbox_corners]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-
-        # 检查点是否在边界内
-        is_inside = (min_x <= point_x <= max_x) and (min_y <= point_y <= max_y)
-
-        self.get_logger().info(
-            f"包含关系验证: point=({point_x:.2f},{point_y:.2f}), "
-            f"bbox=[{min_x:.2f},{max_x:.2f}]x[{min_y:.2f},{max_y:.2f}], "
-            f"result={is_inside}"
-        )
-
-        return is_inside
-
-    def _spin_and_wait_for_target(self, rounds: int) -> bool:
-        """
-        原地旋转指定圈数，每圈8个方向，等待dualmap返回目标位置
-
-        Args:
-            rounds: 旋转圈数
-
-        Returns:
-            bool: True=找到目标, False=未找到
-        """
-        cx, cy = self.current_x, self.current_y
-
-        for round_idx in range(rounds):
-            self.get_logger().info(f"第 {round_idx+1}/{rounds} 圈")
-
-            for direction_idx in range(8):
-                # 检查是否已找到
-                with self._lock:
-                    if self.target_x is not None and self.target_y is not None:
-                        self.get_logger().info("✓ 找到目标，停止旋转")
-                        return True
-
-                # 旋转到下一个方向
-                yaw = math.pi / 4 * direction_idx
-                self._goto_point(cx, cy, yaw=yaw, frame_id="map", wait_timeout=5.0)
-                time.sleep(0.3)  # 每个方向停留0.3秒
-
-        return False
-
-    def _spin_three_rounds(self):
-        """
-        原地旋转3圈（兼容原有接口）
-        """
-        self._spin_and_wait_for_target(5)
+        self.request_exit(f"FAIL: 在 {room_name} 中未找到目标")
 
     def _handle_all_rooms_not_found(self):
         """
@@ -894,9 +763,9 @@ class Task3PPSubscriber(TaskSubscriber):
         searched_list = ", ".join(self.searched_rooms)
         write_log(f"任务失败: 遍历房间 [{searched_list}] 未找到 {self.target_name}")
 
-        # 返回原点(y=-0.3)
-        self.get_logger().info("返回原点 (0, -0.3)")
-        self._goto_point(-0.7, 0.7, yaw=0.0, frame_id="map", wait_timeout=5.0)
+        # 返回原点
+        self.get_logger().info("返回原点")
+        self._goto_point(-1.0, 1.0, yaw=0.0, frame_id="map", wait_timeout=5.0)
 
         print(f"\n{'='*50}")
         print(f"任务失败: 遍历所有房间未找到 {self.target_name}")
@@ -954,19 +823,16 @@ def main():
     qwen_result = parse_command_with_qwen(cfg_path, query_text)
     target_object = qwen_result["target_object"]
     target_room = qwen_result["target_room"]
-    related_object = qwen_result.get("related_object", "None")
     room_priority = qwen_result["room_priority"]
 
     print("=" * 50)
     print(f"目标物品: {target_object}")
-    print(f"相关物品: {related_object if related_object != 'None' else '未指定'}")
     print(f"目标房间: {target_room if target_room != 'None' else '未指定'}")
     print(f"房间优先级: {' -> '.join(room_priority)}")
     print("=" * 50)
 
     # 设置目标信息
     node.target_name = target_object
-    node.related_object_name = related_object if related_object != "None" else "None"
     node.room = target_room if target_room != "None" else None
     node.room_priority = room_priority
 
