@@ -934,16 +934,16 @@ class Task3PPSubscriber(TaskSubscriber):
 def main():
     cfg_path = os.path.join(PROJECT_ROOT, "config/query/query_task_3pp.yaml")
 
-    print("=" * 50)
-    print("正在初始化 ROS 和加载模型...")
-    print("=" * 50)
+    # print("=" * 50)
+    # print("正在初始化 ROS 和加载模型...")
+    # print("=" * 50)
 
-    # 初始化 ROS
-    rclpy.init()
-    node = Task3PPSubscriber(cfg_path)
+    # # 初始化 ROS
+    # rclpy.init()
+    # node = Task3PPSubscriber(cfg_path)
 
     print("=" * 50)
-    print("ROS 和模型加载完成，等待用户输入...")
+    print("等待用户输入...")
     print("=" * 50)
 
     # 读取指令
@@ -964,25 +964,25 @@ def main():
     print(f"房间优先级: {' -> '.join(room_priority)}")
     print("=" * 50)
 
-    # 设置目标信息
-    node.target_name = target_object
-    node.related_object_name = related_object if related_object != "None" else "None"
-    node.room = target_room if target_room != "None" else None
-    node.room_priority = room_priority
+    # # 设置目标信息
+    # node.target_name = target_object
+    # node.related_object_name = related_object if related_object != "None" else "None"
+    # node.room = target_room if target_room != "None" else None
+    # node.room_priority = room_priority
 
-    # 触发任务
-    node._task_event.set()
+    # # 触发任务
+    # node._task_event.set()
 
-    # 启动 executor
-    executor = MultiThreadedExecutor(num_threads=4)
-    executor.add_node(node)
+    # # 启动 executor
+    # executor = MultiThreadedExecutor(num_threads=4)
+    # executor.add_node(node)
 
-    try:
-        executor.spin()
-    finally:
-        executor.shutdown()
-        node.destroy_node()
-        rclpy.shutdown()
+    # try:
+    #     executor.spin()
+    # finally:
+    #     executor.shutdown()
+    #     node.destroy_node()
+    #     rclpy.shutdown()
 
 
 if __name__ == "__main__":
