@@ -234,7 +234,7 @@ class RunnerROSBase:
             current_time = current_time_fn()
             last_time = self.last_message_time
             if self.cfg.use_end_process and last_time is not None:
-                if current_time - last_time > 25.0:
+                if current_time - last_time > 35.0:
                     self.logger.warning(
                         f"current_time: {current_time}, last_time: {last_time}: [Main] No new data received. Entering end process."
                     )

@@ -31,3 +31,9 @@ python3 /home/tipriest/Documents/DualMap/applications/utils/ros_search_test.py \
 
 python3 /data/test/DualMap/applications/utils/ros_search_test.py \
   --ros 2 --name microwave --bbox "-1.50, -7.20,  3.70, -3.36" --score-th 0.35 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name microwave --bbox "-1.80, -3.30,  10.40, 1.88" --score-th 0.35 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name green_plant --bbox "-10.80, -10.30,  10.40, 10.88" --score-th 0.35 --timeout 30

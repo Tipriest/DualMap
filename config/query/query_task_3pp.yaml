@@ -1,0 +1,26 @@
+# Query Task 3++ 配置文件
+
+defaults:
+  - system_config
+  - _self_
+
+# 地图和模型路径
+load_dir: /data/test/DualMap/output/map_results/hm3d_00829-QaLdnwvtxbs/20260129_075903/global_map
+clip_dir: /data/test/DualMap/model/ViT-B-32.pt
+
+# 房间边界定义 [min_x, max_x, min_y, max_y]
+room_edges:
+  bedroom: [3.60, 10.40, -7.45, -4.40]
+  childroom: [5.60, 10.40, -3.50, 1.60]
+  livingroom: [-1.50, 5.60, -3.30, 1.60]
+  kitchen: [-1.50, 3.70, -7.20, -3.36]
+
+# 房间锚点定义 [x, y] - 用于导航到房间的开阔位置
+room_anchors:
+  bedroom: [7.29, -5.54]
+  childroom: [8.0, -1.12]
+  livingroom: [3.59, -2.57]
+  kitchen: [1.19, -4.83]
+
+# API 密钥
+api_key: sk-02e28def7b114e3bb8de9b2dc377b608

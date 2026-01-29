@@ -34,7 +34,7 @@ from utils.object import BaseObject
 
 LOG_FILE = "nav_result.txt"
 
-class TaskSubscriber(Node):
+class TaskSubscriberNoNav(Node):
     def __init__(self, cfg_path: str):
         super().__init__("nav2_goal_sender")
 
@@ -458,9 +458,9 @@ class TaskSubscriber(Node):
 
                 # FLAG: 查找距离最近的空闲点
                 # NOTE: 1.0是 target 距离阈值，根据bbox大小调整
-                free_x, free_y = self.find_optimal_free_point_by_room_center(
-                    target_x, target_y, 1.0
-                )
+                # free_x, free_y = self.find_optimal_free_point_by_room_center(
+                #     target_x, target_y, 1.0
+                # )
 
                 with self._lock:
                     self.target_x = target_x
@@ -481,13 +481,14 @@ class TaskSubscriber(Node):
                             self.get_logger().info(
                                 f"No related object, go to room anchor point: ({anchor_x:.3f}, {anchor_y:.3f})"
                             )
-                            ok = self._goto_point(
-                                anchor_x,
-                                anchor_y,
-                                yaw=0.0,
-                                frame_id="map",
-                                wait_timeout=5.0,
-                            )
+                            # ok = self._goto_point(
+                            #     anchor_x,
+                            #     anchor_y,
+                            #     yaw=0.0,
+                            #     frame_id="map",
+                            #     wait_timeout=5.0,
+                            # )
+                            ok = False
                         else:
                             # TODO: 没有相关物体，也没有房间锚点，随便给个锚点
                             pass
@@ -516,9 +517,10 @@ class TaskSubscriber(Node):
 
                         # ok = self._goto_point(free_rx, free_ry, yaw=0.0, frame_id="map", wait_timeout=5.0)
                         # DEBUG: 朝向相关物体
-                        ok = self._goto_and_face_target(
-                            free_rx, free_ry, rx, ry
-                        )
+                        # ok = self._goto_and_face_target(
+                        #     free_rx, free_ry, rx, ry
+                        # )
+                        ok = False
 
                         # if ok:
                         #     # 如果已经足够接近 target，直接 face；否则去 target
@@ -540,13 +542,14 @@ class TaskSubscriber(Node):
                         self.get_logger().info(
                             f"No related object, go to room anchor point: ({anchor_x:.3f}, {anchor_y:.3f})"
                         )
-                        ok = self._goto_point(
-                            anchor_x,
-                            anchor_y,
-                            yaw=0.0,
-                            frame_id="map",
-                            wait_timeout=5.0,
-                        )
+                        # ok = self._goto_point(
+                        #     anchor_x,
+                        #     anchor_y,
+                        #     yaw=0.0,
+                        #     frame_id="map",
+                        #     wait_timeout=5.0,
+                        # )
+                        ok = False
                     else:
                         # TODO: 没有相关物体，也没有房间锚点，随便给个锚点？
                         pass
@@ -617,9 +620,9 @@ class TaskSubscriber(Node):
                     else:
                         self.request_exit("task complete")
 
-                ok = self._goto_point(
-                    0.0, 0.0, yaw=0.0, frame_id="map", wait_timeout=5.0
-                )
+                # ok = self._goto_point(
+                #     0.0, 0.0, yaw=0.0, frame_id="map", wait_timeout=5.0
+                # )
                 # LOG
                 if ok:
                     write_log("Returned to origin successfully")
@@ -646,7 +649,7 @@ class TaskSubscriber(Node):
             cx + width / 2,
             cy + height / 2,
         ]
-        score_th = 0.54
+        score_th = 0.50
 
         msg.data = self._build_request_json(
             self.target_name, bbox, score_th, continuous=False
@@ -1239,10 +1242,7 @@ class TaskSubscriber(Node):
             )
             # LOG2：Recovery 找到物体记录 <<<
             if ok:
-                write_log(f"-----------------Object Found: {self.target_name} ")
-                write_log(f"-----------------Object Found: {self.target_name} ")
-                write_log(f"-----------------Object Found: {self.target_name} ")
-                time.sleep(5.0)
+                write_log(f"Object Found: {self.target_name} ")
         # while True:
         #     if self.target_x is not None and self.target_y is not None:
         #         break
@@ -1304,35 +1304,16 @@ class TaskSubscriber(Node):
         super().destroy_node()
 
 
-# def write_log(message):
-#     """
-#     记录带有时间戳的日志到文件
-#     """
-#     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-#     log_entry = f"[{timestamp}] {message}\n"
-#     # 输出到控制台方便调试，也可注释掉
-#     print(log_entry.strip())
-#     with open(LOG_FILE, "a") as f:
-#         f.write(log_entry)
-def write_log(msg: str, filename: str = None, log_file: str = None):
+def write_log(message):
     """
-    兼容两种写法：
-      write_log("xxx", filename="a.txt")
-      write_log("xxx", log_file="a.txt")
-      write_log("xxx") -> 默认文件
+    记录带有时间戳的日志到文件
     """
-    # 兼容旧/新参数名
-    if filename is None:
-        filename = log_file
-
-    # 如果都没传，就用你原来默认的路径/文件名
-    if filename is None:
-        filename = "nav_result.txt"   # 这里按你原函数原来的默认值写
-
-    ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    line = f"[{ts}] {msg}\n"
-    with open(filename, "a", encoding="utf-8") as f:
-        f.write(line)
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    log_entry = f"[{timestamp}] {message}\n"
+    # 输出到控制台方便调试，也可注释掉
+    print(log_entry.strip())
+    with open(LOG_FILE, "a") as f:
+        f.write(log_entry)
 
 
 STATUS_NAME = {

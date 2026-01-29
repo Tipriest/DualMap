@@ -83,18 +83,18 @@ save_detection: False
 # PRELOADING CONFIG
 # ============================================================
 # Preload an existing global map from disk
-preload_global_map: True
+preload_global_map: False
 
 # Preload an existing layout pcd and wall pcd from disk
 # If preload the layout, the layout pcd thread will be disabled
-preload_layout: True
+preload_layout: False
 
 # Path to preload map data.
 # If empty, the system will use the default preload path
 # preload_path: ""
 # preload_path: "dataset/HM3D_collect/00829-QaLdnwvtxbs/global_map/hm3d"
 # preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20251217_155119"
-preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20260127_194233"
+preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20260129_024600"
 
 
 # Preload action paths for visualization
