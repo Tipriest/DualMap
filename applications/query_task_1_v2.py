@@ -183,7 +183,7 @@ class Task1Subscriber(TaskSubscriber):
         self.get_logger().info("===== 返回起点 =====")
         write_log("返回起点 (0, 0)")
 
-        return_ok = self._goto_point(0.0, 0.0, yaw=0.0, frame_id="map", wait_timeout=5.0)
+        return_ok = self._goto_point(-1.0, 1.0, yaw=0.0, frame_id="map", wait_timeout=5.0)
 
         if return_ok:
             self.get_logger().info("✓ 成功返回起点")

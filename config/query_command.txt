@@ -19,6 +19,8 @@ python -m applications.query_task_2_3
 去卧室的床上找玩具狗
 去厨房找微波炉
 
+爸爸日常会在书桌上工作，他的黑色书包放在书桌中央；卧室床头柜的台灯是妈妈睡前阅读用的；孩子的书包是橙色的，放学后经常在儿童房里玩玩具，书包一般放在房间的书架上；妈妈经常在厨房准备美食，她早晨用过煤气灶旁的水壶烧开水；卧室的毛绒玩具狗是孩子睡前抱着睡的，所以总放在床头，综合以上信息，请找到妈妈早上在厨房用过的烧水壶
+
 
   bedroom: [3.60, -7.45, 10.68, -3.36]
   childroom: [5.60, -3.50, 10.40, 1.88]
@@ -36,4 +38,5 @@ python3 /data/test/DualMap/applications/utils/ros_search_test.py \
   --ros 2 --name microwave --bbox "-1.80, -3.30,  10.40, 1.88" --score-th 0.35 --timeout 30
 
 python3 /data/test/DualMap/applications/utils/ros_search_test.py \
-  --ros 2 --name green_plant --bbox "-10.80, -10.30,  10.40, 10.88" --score-th 0.35 --timeout 30
+  --ros 2 --name bed --bbox "-10.80, -10.30,  10.40, 10.88" --score-th 0.53 --timeout 30
+

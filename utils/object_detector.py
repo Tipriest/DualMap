@@ -2016,11 +2016,11 @@ class Detector:
         #         self.visualizer.Image(self.curr_data.color),
         #     )
 
-        if self.annotated_image is not None:
-            self.visualizer.log(
-                "world/camera/rgb_image_annotated",
-                self.visualizer.Image(self.annotated_image),
-            )
+        # if self.annotated_image is not None:
+        #     self.visualizer.log(
+        #         "world/camera/rgb_image_annotated",
+        #         self.visualizer.Image(self.annotated_image),
+        #     )
 
         if self.cfg.show_local_entities:
 
