@@ -59,20 +59,40 @@ def parse_command_with_qwen(cfg_path: str, user_query: str):
 请从以下用户指令中提取关键信息并推理房间优先级：
 用户指令："{user_query}"
 
-提取和推理：
+提取内容：
 1. **目标物品** (target_object): 需要寻找的物品（必须存在）
 2. **目标房间** (target_room): 如果用户明确指定了房间则提取，否则返回 "None"
 3. **房间优先级** (room_priority): 根据物品类型，推理最可能出现的房间顺序
 
-房间只有4个：livingroom(客厅), bedroom(卧室), childroom(儿童房), kitchen(厨房)
-
-要求：
+规则：
 - target_object 必须存在，不能为空
 - target_room 只可能是 livingroom, bedroom, childroom, kitchen 之一，或 "None"
+- 物体名称必须从以下列表中选择对应的英文单词：
+  * 背包→backpack, 相框→picture frame, 篮球→basketball, 碗→bowl
+  * 香蕉→banana, 苹果→apple, 木马/玩具马→toy horse, 椅子→chair
+  * 沙发→couch, 绿植/植物→green plant, 床→bed, 桌子→table
+  * 电视→tv, 笔记本电脑→laptop, 微波炉→microwave, 柜子→cabinet
+  * 毛绒玩具/玩偶→soft toy, 地毯→carpet, 台灯→table lamp
+  * 床头柜→nightstand, 帐篷→tent, 积木→building blocks
+  * 书架→bookshelf, 燃气灶→gas stove, 锅→pot, 水壶→kettle
+  * 菜篮/食物篮→food basket, 水龙头→faucet
+- 房间名称必须是 bedroom/childroom/livingroom/kitchen 之一，"床上"、"桌上"等位置描述不是房间
 - room_priority 必须是包含所有4个房间的数组，按可能性从高到低排序
-- 物品名称需要是英文的类型，如"杯子"返回"cup"
 - 如果没有指定房间，客厅(livingroom)必须排在第一位
 - 只返回 JSON 格式，不要其他文本
+- 物品名称需要是英文的类型，如"杯子"返回"cup"
+
+记忆信息：
+爸爸日常会在书桌上工作，他的黑色书包放在书桌中央；
+卧室床头柜的台灯是妈妈睡前阅读用的；
+孩子的书包是橙色的，放学后经常在儿童房里玩玩具，书包一般放在房间的书架上；
+妈妈经常在厨房准备美食，她早晨用过煤气灶旁的水壶烧开水；
+卧室的毛绒玩具狗是孩子睡前抱着睡的，所以总放在床头
+
+示例：
+"找到妈妈早上在厨房用过的烧水壶" → {{"target_object": "kettle", "target_room": "kitchen", "room_priority": ["livingroom", "kitchen", "bedroom", "childroom"]}}
+"找到爸爸的黑色书包" → {{"target_object": "backpack", "target_room": "bedroom", "room_priority": ["livingroom", "bedroom", "childroom", "kitchen"]}}
+"找到孩子的毛绒玩具狗" → {{"target_object": "soft toy", "target_room": "childroom", "room_priority": ["livingroom", "childroom", "bedroom", "kitchen"]}}
 
 输出格式：
 {{
