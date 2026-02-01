@@ -155,7 +155,7 @@ class TaskSubscriber(Node):
         self.map_received = False
 
         self.require_room_filter = True  # 强制要求目标必须在房间bbox内
-        self.room_wait_timeout = 3.0  # 等 room topic 的最大时间（秒）
+        self.room_wait_timeout = 5.0  # 等 room topic 的最大时间（秒）
         # 到达目标点距离，ok就转向它
         self._arrived_dist = 1.0
 
@@ -439,7 +439,7 @@ class TaskSubscriber(Node):
                         ):
                             self.get_logger().error(
                                 f"[room] require_room_filter=True but room not ready within "
-                                f"{getattr(self, 'room_wait_timeout', 3.0)}s. Publish /target_room first."
+                                f"{getattr(self, 'room_wait_timeout', 10.0)}s. Publish /target_room first."
                             )
                             raise RuntimeError("room not ready")
 

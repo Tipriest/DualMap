@@ -19,7 +19,7 @@ room_edges:
 room_anchors:
   bedroom: [8.00, -4.36]
   childroom: [8.87, -1.29]
-  livingroom: [3.40, -2.50]
+  livingroom: [3.38, -2.50]
   kitchen: [0.58, -5.32]
 
 # API 密钥

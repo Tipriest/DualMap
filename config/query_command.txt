@@ -28,8 +28,8 @@ python -m applications.query_task_2_3
   kitchen: [-1.50, -7.20,  3.70, -3.36]
 
 
-python3 /home/tipriest/Documents/DualMap/applications/utils/ros_search_test.py \
-  --ros 2 --name microwave --bbox "-1.50, -7.20,  3.70, -3.36" --score-th 0.35 --timeout 30
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name kettle --bbox "-1.50, -7.20,  3.70, -3.36" --score-th 0.35 --timeout 30
 
 python3 /data/test/DualMap/applications/utils/ros_search_test.py \
   --ros 2 --name microwave --bbox "-1.50, -7.20,  3.70, -3.36" --score-th 0.35 --timeout 30
@@ -40,3 +40,33 @@ python3 /data/test/DualMap/applications/utils/ros_search_test.py \
 python3 /data/test/DualMap/applications/utils/ros_search_test.py \
   --ros 2 --name bed --bbox "-10.80, -10.30,  10.40, 10.88" --score-th 0.53 --timeout 30
 
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name "table lamp" --bbox "3.60, -7.45, 10.68, -3.36" --score-th 0.53 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name "night stand" --bbox "3.60, -7.45, 10.68, -3.36" --score-th 0.53 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name basketball --bbox "-1.80, -3.30, 5.60, 1.80" --score-th 0.53 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name carpet --bbox "-1.80, -3.30, 5.60, 1.80" --score-th 0.53 --timeout 30
+
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name "backpack" --bbox "-10.80, -30.30,  10.40, 10.88" --score-th 0.53 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name "yellow backpack" --bbox "-10.80, -30.30,  10.40, 10.88" --score-th 0.53 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name "black backpack" --bbox "-10.80, -30.30,  10.40, 10.88" --score-th 0.53 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name "backpack" --bbox "3.60, -7.45, 10.68, -3.36" --score-th 0.53 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name "tv" --bbox "3.60, -7.45, 10.68, -3.36" --score-th 0.53 --timeout 30
+
+python3 /data/test/DualMap/applications/utils/ros_search_test.py \
+  --ros 2 --name "kettle" --bbox "-10.80, -30.30,  10.40, 10.88" --score-th 0.53 --timeout 30

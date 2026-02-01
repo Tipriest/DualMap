@@ -94,7 +94,7 @@ preload_layout: False
 # preload_path: ""
 # preload_path: "dataset/HM3D_collect/00829-QaLdnwvtxbs/global_map/hm3d"
 # preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20251217_155119"
-preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20260129_024600"
+preload_path: "output/map_results/hm3d_00829-QaLdnwvtxbs/20260129_110246_simplify"
 
 
 # Preload action paths for visualization
@@ -104,3 +104,4 @@ given_path_dir: ""
 # connect tcp
 use_tcp: True
 tcp_address: "192.168.11.200:9876"
+# tcp_address: "192.168.11.88:9876"
